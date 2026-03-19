@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — greenB{% endblock %}
+
+{% block content %}
+<!-- Row 1: hero stat + bar chart + top apps horizontal bars -->
+<div class="row g-2 mb-2">
+    <!-- Hero stat: total energy -->
+    <div class="col-lg-2">
+        <div class="tile tile-pad d-flex flex-column justify-content-center" style="height:100%;min-height:340px;">
+            <div class="tile-title">Total Energy</div>
+            <div class="tile-number" style="font-size:2.8rem;">{{ total_energy }}<span class="unit">J</span></div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:0.5rem;">{{ "{:,}".format(total_samples) }} samples</div>
+            <div style="margin-top:auto;padding-top:1rem;">
+                <div style="display:flex;justify-content:space-between;font-size:0.6rem;color:var(--muted);margin-bottom:0.2rem;">
+                    <span>{{ all_apps_count }} apps</span>
+                    <span>{{ sessions|length }} sessions</span>
+                </div>
+                <div style="height:5px;background:rgba(255,255,255,0.04);border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;width:100%;background:var(--accent);border-radius:3px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Main bar chart -->
+    <div class="col-lg-6">
+        <div class="tile" style="height:100%;">
+            <div class="tile-header">Energy by Application</div>
+            <div style="padding:0.4rem 0.8rem 0.6rem;">
+                <div id="chart-energy-by-app" class="chart-container"></div>
+            </div>
+        </div>
+    </div>
+    <!-- App grid -->
+    <div class="col-lg-4">
+        <div class="tile" style="height:100%;padding:1rem 1.15rem;">
+            <div class="tile-title" style="margin-bottom:0.75rem;">Applications</div>
+            {% if ratings %}
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:0.5rem;overflow-y:auto;max-height:320px;">
+                {% for r in ratings %}
+                <a href="/app/{{ r.app_name }}" style="text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:0.3rem;padding:0.6rem 0.3rem;background:rgba(255,255,255,0.03);border-radius:8px;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
+                    <div style="position:relative;">
+                        <img src="/icon/{{ r.app_name }}" style="width:32px;height:32px;border-radius:7px;object-fit:cover;" alt="" loading="lazy">
+                        <span class="rating-badge rating-{{ r.rating }}" style="position:absolute;bottom:-4px;right:-4px;width:14px;height:14px;font-size:0.45rem;border-radius:3px;">{{ r.rating }}</span>
+                    </div>
+                    <span style="font-size:0.62rem;color:var(--text-dim);text-align:center;line-height:1.2;word-break:break-word;max-width:100%;">{{ r.app_name }}</span>
+                    <span style="font-size:0.6rem;color:var(--muted);font-variant-numeric:tabular-nums;">{{ "%.1f"|format(r.avg_power_watts) }}W</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="color:var(--muted);font-size:0.8rem;">No data yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Row 2: Orders-style stat + scatter chart + 3 small stat tiles -->
+<div class="row g-2 mb-2">
+    <!-- Left stat tile: avg power hero -->
+    <div class="col-lg-2">
+        <div class="tile tile-pad d-flex flex-column" style="height:100%;">
+            <div class="tile-title">Avg Power</div>
+            <div class="tile-number accent" style="font-size:2.8rem;">{{ total_avg_power }}<span class="unit" style="color:var(--accent);opacity:.6;">W</span></div>
+            <div style="font-size:0.68rem;color:var(--muted);margin-top:0.3rem;">system average</div>
+        </div>
+    </div>
+    <!-- Scatter chart -->
+    <div class="col-lg-6">
+        <div class="tile" style="height:100%;">
+            <div class="tile-header">CPU vs Power</div>
+            <div style="padding:0.4rem 0.8rem 0.6rem;">
+                <div id="chart-cpu-vs-power" class="chart-container"></div>
+            </div>
+        </div>
+    </div>
+    <!-- Right column: 3 stacked small tiles -->
+    <div class="col-lg-4 d-flex flex-column gap-2">
+        <div class="tile tile-pad" style="flex:1;">
+            <div class="tile-title">Sessions</div>
+            <div class="d-flex align-items-baseline gap-3">
+                <div class="tile-number" style="font-size:2rem;">{{ sessions|length }}</div>
+                <span style="font-size:0.68rem;color:var(--muted);">monitoring sessions</span>
+            </div>
+        </div>
+        <div class="tile tile-pad" style="flex:1;">
+            <div class="tile-title">Apps Tracked</div>
+            <div class="d-flex align-items-baseline gap-3">
+                <div class="tile-number" style="font-size:2rem;">{{ all_apps_count }}</div>
+                <span style="font-size:0.68rem;color:var(--muted);">unique applications</span>
+            </div>
+        </div>
+        <div class="tile tile-pad" style="flex:1;">
+            <div class="tile-title">Total Samples</div>
+            <div class="d-flex align-items-baseline gap-3">
+                <div class="tile-number" style="font-size:2rem;">{{ "{:,}".format(total_samples) }}</div>
+                <span style="font-size:0.68rem;color:var(--muted);">data points</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 3: Pie chart + Ratings list -->
+<div class="row g-2 mb-2">
+    <div class="col-lg-5">
+        <div class="tile" style="height:100%;">
+            <div class="tile-header">Energy Share</div>
+            <div style="padding:0.4rem 0.8rem 0.6rem;">
+                <div id="chart-energy-pie" class="chart-container"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="tile" style="height:100%;">
+            <div class="tile-header">Energy Ratings</div>
+            <div class="tile-flush">
+                {% if ratings %}
+                <div style="max-height:340px;overflow-y:auto;">
+                    {% for r in ratings %}
+                    <a href="/app/{{ r.app_name }}" class="ratings-row">
+                        <span class="rating-badge rating-{{ r.rating }}">{{ r.rating }}</span>
+                        <img src="/icon/{{ r.app_name }}" class="app-icon" alt="" loading="lazy">
+                        <span class="app-name">{{ r.app_name }}</span>
+                        <span class="watt-reading">{{ "%.1f"|format(r.avg_power_watts) }} W</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="tile-pad" style="color: var(--muted); font-size: 0.82rem; text-align: center;">
+                    No data yet — <a href="/upload">upload</a> to begin.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 4: Energy over time -->
+<div class="row g-2 mb-2">
+    <div class="col-12">
+        <div class="tile">
+            <div class="tile-header">Energy Consumed Over Time</div>
+            <div style="padding:0.4rem 0.8rem 0.6rem;">
+                <div id="chart-energy-over-time" style="min-height:260px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 5: Real-world context -->
+<div class="tile mb-2">
+    <div class="tile-header">Real-World Context</div>
+    <div class="tile-pad">
+        {% if total_energy > 0 %}
+        {% set kwh = total_energy / 3600000 %}
+        <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.9rem; border-left: 3px solid var(--accent); padding-left: 0.7rem;">
+            <strong style="color: var(--text);">{{ "{:,.1f}".format(total_energy) }} J</strong> total &nbsp;/&nbsp;
+            {{ "%.6f"|format(kwh) }} kWh &mdash;
+            J = <em>how much energy</em>; W = the <em>rate</em>.
+        </p>
+
+        <div class="section-label">Home</div>
+        <div class="row g-2 mb-3">
+            {% for val, lbl in [
+                ("%.1f"|format(kwh / 0.01) ~ 'h',   '10W LED bulb'),
+                ("%.3f"|format(kwh / 0.1)  ~ '\u00d7',   'kettle boil (100 Wh)'),
+                ("%.1f"|format(kwh / 0.04) ~ 'h',   'fridge running (40W)'),
+                ("%.3f"|format(kwh / 0.5)  ~ '\u00d7',   'washing machine (0.5 kWh)'),
+                ("%.1f"|format(kwh / 0.1)  ~ 'h',   'TV streaming (100W)'),
+                ("%.3f"|format(kwh / 2.0)  ~ '\u00d7',   'hot shower (2 kWh)')
+            ] %}
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="ctx-cell">
+                    <div class="ctx-value">{{ val }}</div>
+                    <div class="ctx-label">{{ lbl }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="section-label">Devices</div>
+        <div class="row g-2 mb-3">
+            {% for val, lbl in [
+                ("%.2f"|format(kwh / 0.012) ~ '\u00d7', 'smartphone charge (12 Wh)'),
+                ("%.1f"|format(kwh / 0.01)  ~ 'h', 'MacBook Air idle (10W)'),
+                ("%.1f"|format(kwh / 0.15)  ~ 'h', 'desktop PC (150W)'),
+                ("%.1f"|format(kwh / 0.15)  ~ 'h', 'games console (150W)'),
+                ("%.1f"|format(kwh / 0.01)  ~ 'h', 'Wi-Fi router (10W)'),
+                ("%.3f"|format(kwh / 0.012) ~ '\u00d7', 'laser print job (12 Wh)')
+            ] %}
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="ctx-cell">
+                    <div class="ctx-value">{{ val }}</div>
+                    <div class="ctx-label">{{ lbl }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="section-label">Transport</div>
+        <div class="row g-2 mb-3">
+            {% for val, lbl in [
+                ("%.0f"|format(kwh * 5000)   ~ ' m', 'EV driving (5 km/kWh)'),
+                ("%.0f"|format(kwh * 100000) ~ ' m', 'e-bike assist (100 km/kWh)'),
+                ("%.4f"|format(kwh / 300)    ~ '\u00d7',  'LHR\u2192JFK seat (300 kWh)'),
+                ("%.0f"|format(kwh * 30000)  ~ ' m', 'electric scooter (30 km/kWh)')
+            ] %}
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="ctx-cell">
+                    <div class="ctx-value">{{ val }}</div>
+                    <div class="ctx-label">{{ lbl }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="section-label">CO\u2082 &amp; Nature</div>
+        <div class="row g-2 mb-3">
+            {% for val, lbl in [
+                ("%.3f"|format(kwh * 400)         ~ ' g', 'CO\u2082e (400 g/kWh grid avg)'),
+                ("%.5f"|format(kwh * 400 / 21000)  ~ '\u00d7', 'trees absorb/year (21 kg CO\u2082)'),
+                ("%.1f"|format(kwh / 0.002)        ~ 'h', 'solar panel to generate this'),
+                ("%.3f"|format(kwh * 400 / 2100)   ~ '\u00d7', 'CO\u2082e of a chocolate bar')
+            ] %}
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="ctx-cell">
+                    <div class="ctx-value">{{ val }}</div>
+                    <div class="ctx-label">{{ lbl }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="section-label">Cost</div>
+        <div class="row g-2">
+            {% for val, lbl in [
+                ('\u00a3' ~ "%.5f"|format(kwh * 0.24), 'UK (24p/kWh)'),
+                ('$' ~ "%.5f"|format(kwh * 0.16), 'US (16\u00a2/kWh)'),
+                ('\u20ac' ~ "%.5f"|format(kwh * 0.28), 'EU (28\u00a2/kWh)')
+            ] %}
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="ctx-cell">
+                    <div class="ctx-value">{{ val }}</div>
+                    <div class="ctx-label">{{ lbl }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% else %}
+        <p style="font-size: 0.82rem; color: var(--muted);">
+            Upload monitoring data to see real-world comparisons.
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Row 5: Sessions table -->
+<div class="tile">
+    <div class="tile-header">Recent Sessions</div>
+    <div class="tile-flush">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr>
+                    <th>Name</th><th>Device</th><th>Started</th><th>Duration</th><th>Samples</th><th></th>
+                </tr></thead>
+                <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td style="font-size:0.82rem;font-weight:500;">{{ s.name }}</td>
+                    <td style="color:var(--muted);font-size:0.8rem;">{{ s.device_name or '\u2014' }}</td>
+                    <td style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);">{{ s.started_at.strftime('%Y-%m-%d %H:%M') if s.started_at else '\u2014' }}</td>
+                    <td style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);">{% if s.duration_seconds() %}{{ "%.0f"|format(s.duration_seconds() / 60) }} min{% else %}\u2014{% endif %}</td>
+                    <td style="font-family:var(--mono);font-size:0.8rem;">{{ s.samples.count() }}</td>
+                    <td><a href="/session/{{ s.id }}" class="btn btn-sm btn-outline-secondary">View</a></td>
+                </tr>
+                {% endfor %}
+                {% if not sessions %}
+                <tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:0.82rem;padding:2rem;">No sessions yet.</td></tr>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const apps        = {{ top_apps | map(attribute=0) | list | tojson }};
+    const totalEnergy = {{ top_apps | map(attribute=2) | list | tojson }};
+    const avgPower    = {{ top_apps | map(attribute=1) | list | tojson }};
+    const avgCpu      = {{ top_apps | map(attribute=3) | list | tojson }};
+
+    const ACCENT  = '#00d4ff';
+    const ACCENT2 = '#f0c050';
+    const INK     = '#7b83a6';
+    const RULE    = '#2c3268';
+    const FONT    = 'DM Sans, system-ui, sans-serif';
+    const CARD    = '#222750';
+
+    const baseLayout = {
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor:  'rgba(0,0,0,0)',
+        font: { color: INK, family: FONT, size: 11 },
+        margin: { t: 8, b: 50, l: 50, r: 12 },
+        xaxis: { gridcolor: RULE, tickcolor: INK, linecolor: RULE, zerolinecolor: RULE, gridwidth: 1 },
+        yaxis: { gridcolor: RULE, tickcolor: INK, linecolor: RULE, zerolinecolor: RULE, gridwidth: 1 },
+    };
+
+    if (apps.length > 0) {
+        /* Bar chart — cyan + gold like Geckoboard */
+        Plotly.newPlot('chart-energy-by-app', [{
+            x: apps.slice(0, 10),
+            y: totalEnergy.slice(0, 10).map(v => v ? Math.round(v * 100) / 100 : 0),
+            type: 'bar',
+            marker: {
+                color: apps.slice(0, 10).map((_, i) => i % 2 === 0 ? ACCENT : ACCENT2),
+                line: { width: 0 },
+            },
+        }], {
+            ...baseLayout,
+            xaxis: { ...baseLayout.xaxis, title: { text: 'Application', font: { size: 10, family: FONT } }, tickangle: -30 },
+            yaxis: { ...baseLayout.yaxis, title: { text: 'Total Energy (J)', font: { size: 10, family: FONT } } },
+            bargap: 0.25,
+        }, { responsive: true, displayModeBar: false });
+
+        /* Scatter */
+        Plotly.newPlot('chart-cpu-vs-power', [{
+            x: avgCpu.map(v => v ? Math.round(v * 100) / 100 : 0),
+            y: avgPower.map(v => v ? Math.round(v * 1000) / 1000 : 0),
+            text: apps,
+            mode: 'markers+text',
+            textposition: 'top center',
+            textfont: { size: 9, family: FONT, color: INK },
+            marker: { size: 10, color: ACCENT, opacity: 0.9, line: { color: CARD, width: 1.5 } },
+        }], {
+            ...baseLayout,
+            xaxis: { ...baseLayout.xaxis, title: { text: 'Avg CPU %', font: { size: 10, family: FONT } } },
+            yaxis: { ...baseLayout.yaxis, title: { text: 'Avg Power (W)', font: { size: 10, family: FONT } } },
+        }, { responsive: true, displayModeBar: false });
+
+        /* Pie — cyan shades */
+        const palette = [
+            '#00d4ff','#00b8e6','#5eecff','#99f2ff','#0099bb',
+            '#f0c050','#d4a940','#353b64','#4e5580','#6b7399'
+        ];
+        Plotly.newPlot('chart-energy-pie', [{
+            labels: apps.slice(0, 8),
+            values: totalEnergy.slice(0, 8).map(v => v ? Math.round(v * 100) / 100 : 0),
+            type: 'pie',
+            hole: 0.52,
+            textinfo: 'label+percent',
+            textfont: { size: 10, family: FONT, color: '#eef0f6' },
+            marker: { colors: palette, line: { color: CARD, width: 2 } },
+        }], {
+            ...baseLayout,
+            margin: { t: 8, b: 8, l: 8, r: 8 },
+            showlegend: false,
+        }, { responsive: true, displayModeBar: false });
+    }
+
+    /* Energy consumed over time — area + bar */
+    fetch('/api/summary/energy-over-time')
+        .then(r => r.json())
+        .then(data => {
+            if (data.length > 0) {
+                const ts     = data.map(d => d.timestamp);
+                const cumJ   = data.map(d => d.cumulative_joules);
+                const perJ   = data.map(d => d.energy_joules);
+
+                Plotly.newPlot('chart-energy-over-time', [
+                    {
+                        x: ts, y: cumJ,
+                        type: 'scatter', mode: 'lines',
+                        name: 'Cumulative (J)',
+                        line: { color: ACCENT, width: 2, shape: 'spline' },
+                        fill: 'tozeroy',
+                        fillcolor: 'rgba(0,212,255,0.10)',
+                    },
+                    {
+                        x: ts, y: perJ,
+                        type: 'bar',
+                        name: 'Per interval (J)',
+                        marker: { color: ACCENT2, opacity: 0.55, line: { width: 0 } },
+                        yaxis: 'y2',
+                    },
+                ], {
+                    ...baseLayout,
+                    margin: { t: 8, b: 50, l: 55, r: 55 },
+                    xaxis: { ...baseLayout.xaxis, title: { text: 'Time', font: { size: 10, family: FONT } } },
+                    yaxis: { ...baseLayout.yaxis, title: { text: 'Cumulative Energy (J)', font: { size: 10, family: FONT } }, side: 'left' },
+                    yaxis2: {
+                        title: { text: 'Per Interval (J)', font: { size: 10, family: FONT, color: ACCENT2 } },
+                        overlaying: 'y', side: 'right',
+                        gridcolor: 'rgba(0,0,0,0)', tickfont: { color: ACCENT2, size: 10, family: FONT },
+                        showgrid: false,
+                    },
+                    legend: { x: 0, y: 1.12, orientation: 'h', font: { size: 10, family: FONT, color: INK } },
+                    bargap: 0.15,
+                }, { responsive: true, displayModeBar: false });
+            }
+        });
+});
+</script>
+{% endblock %}

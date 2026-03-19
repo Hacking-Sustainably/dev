@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Background -->
+  <rect width="64" height="64" rx="14" fill="#1a1f2e"/>
+  <!-- Body (iridescent green, like the sweat bee) -->
+  <ellipse cx="32" cy="36" rx="10" ry="14" fill="#22c55e"/>
+  <!-- Yellow pollen belly -->
+  <ellipse cx="32" cy="40" rx="7" ry="8" fill="#eab308"/>
+  <!-- Head -->
+  <circle cx="32" cy="21" r="8" fill="#16a34a"/>
+  <!-- Eyes -->
+  <circle cx="28.5" cy="20" r="2" fill="#052e16"/>
+  <circle cx="35.5" cy="20" r="2" fill="#052e16"/>
+  <!-- Eye shine -->
+  <circle cx="29.2" cy="19.3" r="0.7" fill="#bbf7d0" opacity="0.8"/>
+  <circle cx="36.2" cy="19.3" r="0.7" fill="#bbf7d0" opacity="0.8"/>
+  <!-- Antennae -->
+  <line x1="29" y1="13" x2="24" y2="7" stroke="#052e16" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="35" y1="13" x2="40" y2="7" stroke="#052e16" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="24" cy="7" r="1.5" fill="#052e16"/>
+  <circle cx="40" cy="7" r="1.5" fill="#052e16"/>
+  <!-- Wings -->
+  <ellipse cx="18" cy="30" rx="9" ry="5" fill="#bfdbfe" opacity="0.55" transform="rotate(-20 18 30)"/>
+  <ellipse cx="46" cy="30" rx="9" ry="5" fill="#bfdbfe" opacity="0.55" transform="rotate(20 46 30)"/>
+  <!-- Body stripes -->
+  <rect x="22.5" y="32" width="19" height="2" rx="1" fill="#166534" opacity="0.6"/>
+  <rect x="22.5" y="37" width="19" height="2" rx="1" fill="#166534" opacity="0.6"/>
+  <!-- Legs -->
+  <line x1="22" y1="35" x2="14" y2="40" stroke="#052e16" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="42" y1="35" x2="50" y2="40" stroke="#052e16" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="22" y1="39" x2="13" y2="46" stroke="#052e16" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="42" y1="39" x2="51" y2="46" stroke="#052e16" stroke-width="1.2" stroke-linecap="round"/>
+  <!-- Pollen dots -->
+  <circle cx="28" cy="43" r="1.5" fill="#fde68a" opacity="0.9"/>
+  <circle cx="36" cy="44" r="1.2" fill="#fde68a" opacity="0.9"/>
+  <circle cx="32" cy="46" r="1" fill="#fde68a" opacity="0.8"/>
+</svg>
