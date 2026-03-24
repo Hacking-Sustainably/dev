@@ -16,26 +16,21 @@ use crate::SHUTDOWN;
 use crate::schema::EnergySample;
 
 #[derive(Debug, Deserialize)]
-struct PowermetricsSample {
+pub struct PowermetricsSample {
     elapsed_ns: u64,
     cpu_power: Option<f64>,
     gpu_power: Option<f64>,
     combined_power: Option<f64>,
-    tasks: TasksWrapper,
-}
-
-#[derive(Debug, Deserialize)]
-struct TasksWrapper {
     tasks: Vec<ProcessSample>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ProcessSample {
-    pid: u32,
+    pid: i32,
     name: String,
-    cpu_ms_per_s: f64,
+    cputime_ms_per_s: f64,
     #[serde(default)]
-    gpu_ms_per_s: f64,
+    gputime_ms_per_s: f64,
 }
 
 pub async fn spawn_powermetrics(tx: Sender<EnergySample>, session_id: i64) -> std::io::Result<()> {
@@ -92,7 +87,7 @@ pub async fn spawn_powermetrics(tx: Sender<EnergySample>, session_id: i64) -> st
     child.kill().await
 }
 
-fn parse_sample(buf: &[u8]) -> Result<PowermetricsSample, plist::Error> {
+pub fn parse_sample(buf: &[u8]) -> Result<PowermetricsSample, plist::Error> {
     plist::from_bytes(buf)
 }
 

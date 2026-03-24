@@ -8,7 +8,7 @@ use crate::InternalError;
 use crate::schema::EnergySample;
 
 mod linux;
-mod macos;
+pub mod macos;
 mod windows;
 
 pub async fn metrics_task(
