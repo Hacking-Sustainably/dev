@@ -12,7 +12,7 @@ pub async fn idle_task(
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), InternalError> {
     let mut interval = tokio::time::interval(
-        std::time::Duration::from_secs(60), // check for idle every 60s
+        std::time::Duration::from_secs(20), // check for idle every 60s
     );
     shutdown.mark_unchanged();
     loop {
@@ -22,7 +22,9 @@ pub async fn idle_task(
             }
             _ = interval.tick() => {
                 let idle_secs = seconds_since_last_input().await.unwrap_or(0.0);
-                let new_rate = if idle_secs > 300.0 {
+                let new_rate = if idle_secs > 900.0 {
+                    30 * 60 * 1000 // more than 15 minutes idle, might as well be sleeping
+                } else if idle_secs > 300.0 {
                     60_000 // system very idle
                 } else if idle_secs > 60.0 {
                     30_000 // mildly idle

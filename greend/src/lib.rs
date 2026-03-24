@@ -12,7 +12,7 @@ pub mod schema;
 pub mod subprocess;
 
 /// how many samples to buffer before flushing to the database file
-pub const BUFFER_SIZE: usize = 10;
+pub const SAMPLE_BUFFER_SIZE: usize = 100;
 
 #[derive(Debug, thiserror::Error)]
 pub enum InternalError {
