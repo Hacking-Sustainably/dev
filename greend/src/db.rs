@@ -1,5 +1,7 @@
 //! deutche bahn (sqlite)
 
+use std::path::Path;
+
 use chrono::Utc;
 use rusqlite::Connection;
 use rusqlite::params;
@@ -95,7 +97,7 @@ fn end_session(conn: &Connection, session_id: i64, ended_at: Timestamp) -> rusql
 
 pub async fn writer_task(
     mut rx: Receiver<EnergySample>,
-    db_path: &str,
+    db_path: &Path,
     session_tx: oneshot::Sender<i64>,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), InternalError> {

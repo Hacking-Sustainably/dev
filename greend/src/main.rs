@@ -5,6 +5,7 @@
 use greend::BUFFER_SIZE;
 use greend::InternalError;
 use greend::db;
+use greend::get_database_path;
 use greend::idle;
 use greend::subprocess;
 use tokio::signal::unix::SignalKind;
@@ -36,7 +37,7 @@ async fn main() -> Result<(), InternalError> {
     let mut join_set = tokio::task::JoinSet::new();
 
     // hardcoded for now
-    let db_path = "../../instance/energy_monitor.db";
+    let db_path = get_database_path()?;
 
     // metrics task:
     // - spawns powermetrics as subprocess
@@ -58,9 +59,9 @@ async fn main() -> Result<(), InternalError> {
     // - on quit, update end time in MonitoringSession
 
     let shutdown = shutdown_rx.clone();
-    join_set.spawn(
-        async move { db::writer_task(sample_receiver, db_path, session_tx, shutdown).await },
-    );
+    join_set.spawn(async move {
+        db::writer_task(sample_receiver, &db_path, session_tx, shutdown).await
+    });
 
     join_set.spawn(async move { idle::idle_task(sample_rate_tx, shutdown_rx).await });
 
