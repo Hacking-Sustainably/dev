@@ -11,7 +11,7 @@ os.makedirs(instance_dir, exist_ok=True)
 
 with app.app_context():
     from app import db, models  # noqa: F401
-    db_path = os.path.join(instance_dir, "energy_monitor.db")
+    db_path = app.config.SQLALCHEMY_DATABASE_URI
     if not os.path.exists(db_path):
         db.create_all()
         print(f"✓ Database created at {db_path}")

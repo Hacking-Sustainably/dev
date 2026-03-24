@@ -5,6 +5,8 @@ use rusqlite::Connection;
 use rusqlite::params;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot;
+use tokio::sync::watch;
+use tracing::warn;
 
 use crate::BUFFER_SIZE;
 use crate::InternalError;
@@ -95,6 +97,7 @@ pub async fn writer_task(
     mut rx: Receiver<EnergySample>,
     db_path: &str,
     session_tx: oneshot::Sender<i64>,
+    mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), InternalError> {
     let conn = Connection::open(db_path)?;
 
@@ -126,10 +129,24 @@ pub async fn writer_task(
 
     let mut buffer: Vec<EnergySample> = Vec::with_capacity(BUFFER_SIZE);
 
-    while let Some(sample) = rx.recv().await {
-        buffer.push(sample);
-        if buffer.len() >= BUFFER_SIZE {
-            flush(&conn, session_id, &mut buffer)?;
+    shutdown.mark_unchanged();
+    loop {
+        tokio::select! {
+            x = rx.recv() => {
+                if let Some(sample) = x {
+                buffer.push(sample);
+                if buffer.len() >= BUFFER_SIZE {
+                    flush(&conn, session_id, &mut buffer)?;
+                }
+                }
+             else {
+                 warn!("db task sample receiver closed, exiting");
+                 break;
+             }
+            }
+            Ok(()) = shutdown.changed() => {
+                break;
+            }
         }
     }
 
