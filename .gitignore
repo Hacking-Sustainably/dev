@@ -12,3 +12,6 @@ build/
 .DS_Store
 app/static/icons/
 target/
+.idea/
+summary.toml
+summary.md

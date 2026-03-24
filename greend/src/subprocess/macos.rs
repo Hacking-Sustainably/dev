@@ -1,14 +1,21 @@
-//! 
+//! retrieve system energy usage samples from `powermetrics` and
+//! convert to [`EnergySample`] structs for the database.
 use std::process::Stdio;
 
-use tokio::process::Command;
-use tokio::io::{AsyncReadExt, BufReader};
 use serde::Deserialize;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
+use tokio::process::Command;
 use tokio::sync::mpsc::Sender;
+use tracing::error;
+use tracing::info;
+use tracing::trace;
+use tracing::warn;
 
+use crate::SHUTDOWN;
 use crate::schema::EnergySample;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct PowermetricsSample {
     elapsed_ns: u64,
     cpu_power: Option<f64>,
@@ -17,12 +24,12 @@ struct PowermetricsSample {
     tasks: TasksWrapper,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct TasksWrapper {
     tasks: Vec<ProcessSample>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ProcessSample {
     pid: u32,
     name: String,
@@ -31,47 +38,64 @@ struct ProcessSample {
     gpu_ms_per_s: f64,
 }
 
-pub async fn spawn_powermetrics(tx: Sender<EnergySample>) -> std::io::Result<()> {
+pub async fn spawn_powermetrics(tx: Sender<EnergySample>, session_id: i64) -> std::io::Result<()> {
+    info!("spawning powermetrics child");
     let mut child = Command::new("sudo")
-        .args(["powermetrics",
-               "--samplers", "cpu_power,gpu_power,tasks",
-               "--output-format", "json",
-               "-i", "5000"])
+        .args([
+            "powermetrics",
+            "--samplers",
+            "cpu_power,gpu_power,tasks",
+            "--format",
+            "plist",
+            "-i",
+            "5000",
+        ])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()?;
-    
+
     let stdout = child.stdout.take().unwrap();
     let mut reader = BufReader::new(stdout);
     let mut buf = Vec::with_capacity(128 * 1024); // 128KB initial
-    
-    loop {
-        let mut byte = [0u8; 1];
-        // read until form-feed
-        loop {
-            reader.read_exact(&mut byte).await?;
-            if byte[0] == b'\x0c' { break; }
-            buf.push(byte[0]);
+
+    let mut sample_buf = Vec::with_capacity(32);
+
+    'read_loop: loop {
+        if SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) {
+            break 'read_loop;
         }
-    
-        let sample = parse_sample(&buf).ok_or_else(|| todo!("handle parse error somehow"))?;
+        // read until null byte
+        reader.read_until(0, &mut buf).await?;
+
+        let sample = match parse_sample(&buf) {
+            Ok(s) => s,
+            Err(e) => {
+                buf.clear();
+                error!("powermetrics parse error: {e}");
+                continue;
+            }
+        };
+        trace!("parsed sample: {sample:?}");
         buf.clear();
-    
-        if let Err(e) = tx.send(sample.into()).await {
-            // channel closed
-            break;
+
+        convert_samples(session_id, sample, &mut sample_buf);
+        for sample in sample_buf.drain(..) {
+            if let Err(e) = tx.send(sample).await {
+                // channel closed
+                warn!("channel closed for powermetrics task: {e}");
+                break 'read_loop;
+            }
         }
     }
-    
+
+    info!("killing powermetrics child");
     child.kill().await
 }
 
-fn parse_sample(buf: &[u8]) -> Option<PowermetricsSample> {
-    todo!()
+fn parse_sample(buf: &[u8]) -> Result<PowermetricsSample, plist::Error> {
+    plist::from_bytes(buf)
 }
 
-impl From<PowermetricsSample> for EnergySample {
-    fn from(value: PowermetricsSample) -> Self {
-        todo!()
-    }
+fn convert_samples(session_id: i64, value: PowermetricsSample, buf: &mut [EnergySample]) {
+    todo!()
 }
