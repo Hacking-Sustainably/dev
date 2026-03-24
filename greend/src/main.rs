@@ -2,8 +2,8 @@
 //! periodically samples system wide energy usage,
 //! writes it to the greenb database for later processing
 
-use greend::BUFFER_SIZE;
 use greend::InternalError;
+use greend::SAMPLE_BUFFER_SIZE;
 use greend::db;
 use greend::get_database_path;
 use greend::idle;
@@ -32,7 +32,7 @@ async fn main() -> Result<(), InternalError> {
     let (session_tx, session_rx) = oneshot::channel();
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let (sample_rate_tx, sample_rate) = watch::channel(5_000);
-    let (sample_sender, sample_receiver) = mpsc::channel(BUFFER_SIZE * 4);
+    let (sample_sender, sample_receiver) = mpsc::channel(SAMPLE_BUFFER_SIZE * 4);
 
     let mut join_set = tokio::task::JoinSet::new();
 

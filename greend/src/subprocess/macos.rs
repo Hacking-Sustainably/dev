@@ -1,6 +1,7 @@
 //! retrieve system energy usage samples from `powermetrics` and
 //! convert to [`EnergySample`] structs for the database.
 use std::process::Stdio;
+use std::time::Duration;
 
 use serde::Deserialize;
 use tokio::io::AsyncBufReadExt;
@@ -52,6 +53,7 @@ pub async fn spawn_powermetrics(
     let mut buf = Vec::with_capacity(128 * 1024); // 128KB initial
 
     let mut sample_buf = Vec::with_capacity(32);
+    let mut current_interval = *interval_ms.borrow_and_update();
     'outer: loop {
         tokio::select! {
             _ = shutdown.changed() => {
@@ -60,13 +62,21 @@ pub async fn spawn_powermetrics(
                 }
             },
             _ = interval_ms.changed() => {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                // then drain any further changes before restarting
+                while interval_ms.has_changed().unwrap_or(false) {
+                    interval_ms.mark_unchanged();
+                }
                 let new_interval = *interval_ms.borrow_and_update();
-                info!("interval_ms changed to {new_interval}");
-                child.kill().await?;
-                let (new_child, new_stdout) = start_child(new_interval)?;
-                child = new_child;
-                reader = BufReader::new(new_stdout);
-                buf.clear();
+                if new_interval != current_interval {
+                    info!("interval_ms changed to {new_interval}");
+                    child.kill().await?;
+                    let (new_child, new_stdout) = start_child(new_interval)?;
+                    child = new_child;
+                    reader = BufReader::new(new_stdout);
+                    buf.clear();
+                    current_interval = new_interval;
+                }
             }
             x = reader.read_until(0, &mut buf) => {
                 match x {
@@ -129,7 +139,7 @@ fn parse_sample(buf: &[u8]) -> Result<PowermetricsSample, plist::Error> {
     plist::from_bytes(buf)
 }
 
-fn convert_samples(session_id: i64, value: PowermetricsSample, buf: &mut [EnergySample]) {
+fn convert_samples(session_id: i64, value: PowermetricsSample, buf: &mut Vec<EnergySample>) {
     todo!()
 }
 

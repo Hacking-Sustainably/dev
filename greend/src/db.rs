@@ -10,8 +10,8 @@ use tokio::sync::oneshot;
 use tokio::sync::watch;
 use tracing::warn;
 
-use crate::BUFFER_SIZE;
 use crate::InternalError;
+use crate::SAMPLE_BUFFER_SIZE;
 use crate::schema::EnergySample;
 use crate::schema::MonitoringSession;
 use crate::schema::Timestamp;
@@ -108,6 +108,7 @@ pub async fn writer_task(
         PRAGMA journal_mode=WAL;
         PRAGMA synchronous=NORMAL;
         PRAGMA cache_size=-8000;
+        PRAGMA temp_store=MEMORY;
     ",
     )?;
 
@@ -129,7 +130,7 @@ pub async fn writer_task(
 
     let _ = session_tx.send(session_id);
 
-    let mut buffer: Vec<EnergySample> = Vec::with_capacity(BUFFER_SIZE);
+    let mut buffer: Vec<EnergySample> = Vec::with_capacity(SAMPLE_BUFFER_SIZE);
 
     shutdown.mark_unchanged();
     loop {
@@ -137,7 +138,7 @@ pub async fn writer_task(
             x = rx.recv() => {
                 if let Some(sample) = x {
                 buffer.push(sample);
-                if buffer.len() >= BUFFER_SIZE {
+                if buffer.len() >= SAMPLE_BUFFER_SIZE {
                     flush(&conn, session_id, &mut buffer)?;
                 }
                 }
