@@ -12,33 +12,37 @@ use tokio::process::Command;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::watch;
 use tracing::error;
-use tracing::info;
+use tracing::info;    use chrono::{DateTime, Utc};
+
 use tracing::trace;
 use tracing::warn;
 
 use crate::schema::EnergySample;
+use crate::schema::Timestamp;
 
 #[derive(Debug, Deserialize)]
-struct PowermetricsSample {
+pub struct PowermetricsSample {
+    timestamp: String,
     elapsed_ns: u64,
-    cpu_power: Option<f64>,
-    gpu_power: Option<f64>,
-    combined_power: Option<f64>,
-    tasks: TasksWrapper,
+    tasks: Vec<ProcessSample>,
+
+    pub processor: ProcessorMetrics,
 }
 
 #[derive(Debug, Deserialize)]
-struct TasksWrapper {
-    tasks: Vec<ProcessSample>,
+pub struct ProcessorMetrics {
+    pub cpu_power: f64,
+    pub gpu_power: f64,
+    pub combined_power: f64,
 }
 
 #[derive(Debug, Deserialize)]
 struct ProcessSample {
     pid: u32,
     name: String,
-    cpu_ms_per_s: f64,
+    cputime_ms_per_s: f64,
     #[serde(default)]
-    gpu_ms_per_s: f64,
+    gputime_ms_per_s: f64,
 }
 
 pub async fn spawn_powermetrics(
@@ -140,7 +144,75 @@ fn parse_sample(buf: &[u8]) -> Result<PowermetricsSample, plist::Error> {
 }
 
 fn convert_samples(session_id: i64, value: PowermetricsSample, buf: &mut Vec<EnergySample>) {
-    todo!()
+    
+    let timestamp: Timestamp = DateTime::parse_from_rfc3339(&value.timestamp)
+        .expect("invalid timestamp")
+        .with_timezone(&Utc);
+    
+    let duration_s = value.elapsed_ns as f64 / 1_000_000_000.0;
+    
+    let total_cpu: f64 = value.tasks
+        .iter()
+        .map(|t| t.cputime_ms_per_s)
+        .sum();
+    
+    let total_gpu: f64 = value.tasks
+        .iter()
+        .map(|t| t.gputime_ms_per_s)
+        .sum();
+    
+    let cpu_power = value.processor.cpu_power;
+    let gpu_power = value.processor.gpu_power;
+    let total_power: f64 = value.processor.combined_power;
+    
+    for proc in value.tasks {
+        if total_cpu == 0.0 {
+            continue;
+        }
+        
+        let cpu_ratio = if total_cpu > 0.0 {
+            proc.cputime_ms_per_s / total_cpu
+        } else {
+            0.0
+        };
+        
+        let gpu_ratio = if total_gpu > 0.0 {
+            proc.gputime_ms_per_s / total_gpu
+        } else {
+            0.0
+        };
+        
+        let process_power =
+            cpu_power * cpu_ratio +
+            gpu_power * gpu_ratio;
+        
+        let energy_joules = process_power * duration_s;
+        
+        let cpu_percent = proc.cputime_ms_per_s / 1000.0 * 100.0;
+        
+        buf.push(EnergySample {
+            id: None,
+            session_id,
+            timestamp: timestamp.clone(),
+            app_name: proc.name.clone(),
+            pid: Some(proc.pid as u32),
+            
+            power_watts: Some(process_power),
+            energy_joules: Some(energy_joules),
+            cpu_percent: Some(cpu_percent),
+            
+            memory_mb: None,
+            gpu_percent: None,
+            disk_read_mb: None,
+            disk_write_mb: None,
+            network_sent_mb: None,
+            network_recv_mb: None,
+            
+            category: None,
+            is_background: true,
+            
+        });
+    }
 }
 
 #[cfg(test)]
@@ -153,7 +225,7 @@ mod tests {
     #[test]
     fn test_parse_sample() {
         let sample_input =
-            std::fs::read_to_string(PathBuf::from_str("../sample-output.xml").unwrap()).unwrap();
+            std::fs::read_to_string(PathBuf::from_str("../test_samples/sample-output.xml").unwrap()).unwrap();
         let sample = parse_sample(sample_input.as_bytes()).unwrap();
         println!("{sample:?}");
     }

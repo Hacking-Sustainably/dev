@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from config import config_map
+from config import config_map, get_database_path
 import os
 
 db = SQLAlchemy()
