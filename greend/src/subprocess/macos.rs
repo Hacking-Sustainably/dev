@@ -40,7 +40,7 @@ pub struct ProcessorMetrics {
 
 #[derive(Debug, Deserialize)]
 struct ProcessSample {
-    pid: u32,
+    pid: i32,
     name: String,
     cputime_ms_per_s: f64,
     #[serde(default)]
@@ -104,8 +104,10 @@ pub async fn spawn_powermetrics(
                         let sample = match parse_sample(&buf) {
                             Ok(s) => s,
                             Err(e) => {
-                                buf.clear();
                                 error!(session_id, error = %e, "powermetrics: parse error");
+                                debug!(session_id, "powermetrics: parse error: {e}");
+                                trace!("buffer: \n{:?}", String::from_utf8_lossy(&buf));
+                                buf.clear();
                                 continue;
                             }
                         };
@@ -170,7 +172,8 @@ fn start_child(interval_ms: u64) -> std::io::Result<(Child, ChildStdout)> {
 }
 
 fn parse_sample(buf: &[u8]) -> Result<PowermetricsSample, plist::Error> {
-    plist::from_bytes(buf)
+    let data = buf.strip_suffix(&[0]).unwrap_or(buf);
+    plist::from_bytes(data)
 }
 
 fn convert_samples(session_id: i64, value: PowermetricsSample, buf: &mut Vec<EnergySample>) {

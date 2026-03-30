@@ -24,7 +24,7 @@ pub struct EnergySample {
 
     pub timestamp: Timestamp,
     pub app_name: String,
-    pub pid: Option<u32>,
+    pub pid: Option<i32>,
 
     // Energy metrics
     /// instantaneous power draw (W)

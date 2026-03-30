@@ -23,15 +23,19 @@ async fn main() -> Result<(), InternalError> {
     // Initialize tracing
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "greend=info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                if cfg!(debug_assertions) {
+                    "greend=trace".into()
+                } else {
+                    "greend=info".into()
+                }
+            }),
         )
         .with(
             tracing_subscriber::fmt::layer()
                 .with_writer(std::io::stderr)
                 .with_target(true)
-                .with_level(true)
-                .with_thread_ids(true),
+                .with_level(true), // .with_thread_ids(true),
         )
         .init();
 
@@ -84,13 +88,9 @@ async fn main() -> Result<(), InternalError> {
     let local = tokio::task::LocalSet::new();
     info!("spawning writer task");
     let shutdown = shutdown_rx.clone();
-    local
-        .run_until(async {
-            tokio::task::spawn_local(async move {
-                db::writer_task(sample_receiver, &db_path, session_tx, shutdown).await
-            });
-        })
-        .await;
+    let mut writer_handle = local.spawn_local(async move {
+        db::writer_task(sample_receiver, &db_path, session_tx, shutdown).await
+    });
 
     info!("spawning idle detection task");
     join_set.spawn(async move { idle::idle_task(sample_rate_tx, shutdown_rx).await });
@@ -102,34 +102,48 @@ async fn main() -> Result<(), InternalError> {
     let mut sigterm = signal(SignalKind::terminate())?;
 
     info!("all tasks spawned, entering main event loop");
-    tokio::select! {
-        Some(join_result) = join_set.join_next() => {
-            error!("unexpected task termination, initiating shutdown");
-            let _ = shutdown_tx.send(true);
-            let _ = join_set.join_all().await;
-            let _ = local.await;
-            match join_result {
-                Ok(Ok(())) => {
-                    error!("some task exited for no reason");
-                    return Err(InternalError::TaskError);
+    local
+        .run_until(async {
+            tokio::select! {
+                res = &mut writer_handle => {
+                    error!("writer task exited unexpectedly, initiating shutdown");
+                    let _ = shutdown_tx.send(true);
+                    let _ = join_set.join_all().await;
+                    match res {
+                        Ok(Ok(())) => Err(InternalError::TaskError),
+                        Ok(Err(e)) => Err(e), // propagate writer error
+                        Err(join_err) => Err(InternalError::TaskJoinError(join_err)),
+                    }
                 }
-                Ok(Err(err)) => {
-                    error!("task returned error: {err}");
-                    return Err(err);
+                Some(join_result) = join_set.join_next() => {
+                    error!("unexpected task termination, initiating shutdown");
+                    let _ = shutdown_tx.send(true);
+                    let _ = join_set.join_all().await;
+                    let _ = writer_handle.await;
+                    match join_result {
+                        Ok(Ok(())) => {
+                            error!("some task exited for no reason");
+                            Err(InternalError::TaskError)
+                        }
+                        Ok(Err(err)) => {
+                            error!("task returned error: {err}");
+                            Err(err)
+                        }
+                        Err(err) => {
+                            error!("task join error: {err}");
+                            Err(err.into())
+                        }
+                    }
                 }
-                Err(err) => {
-                    error!("task join error: {err}");
-                    return Err(err.into());
+                _ = sigterm.recv() => {
+                    info!("SIGTERM received, initiating graceful shutdown");
+                    let _ = shutdown_tx.send(true);
+                    let _ = join_set.join_all().await;
+                    let _ = writer_handle.await;
+                    info!("graceful shutdown complete");
+                    Ok(())
                 }
             }
-        }
-        _ = sigterm.recv() => {
-            info!("SIGTERM received, initiating graceful shutdown");
-            let _ = shutdown_tx.send(true);
-            let _ = join_set.join_all().await;
-            let _ = local.await;
-            info!("graceful shutdown complete");
-            return Ok(());
-        }
-    }
+        })
+        .await
 }

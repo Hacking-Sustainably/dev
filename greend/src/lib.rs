@@ -12,6 +12,9 @@ pub mod schema;
 pub mod subprocess;
 
 /// how many samples to buffer before flushing to the database file
+#[cfg(not(debug_assertions))]
+pub const SAMPLE_BUFFER_SIZE: usize = 1000;
+#[cfg(debug_assertions)]
 pub const SAMPLE_BUFFER_SIZE: usize = 5;
 
 #[derive(Debug, thiserror::Error)]
