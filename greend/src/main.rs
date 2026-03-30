@@ -14,9 +14,29 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::watch;
 use tracing::error;
+use tracing::info;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), InternalError> {
+    // Initialize tracing
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "greend=info".into()),
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_target(true)
+                .with_level(true)
+                .with_thread_ids(true),
+        )
+        .init();
+
+    info!("greend daemon starting up");
+
     // todo:
     // - detect database from any of:
     //   - environment variable
@@ -36,8 +56,8 @@ async fn main() -> Result<(), InternalError> {
 
     let mut join_set = tokio::task::JoinSet::new();
 
-    // hardcoded for now
     let db_path = get_database_path()?;
+    info!(?db_path, "database path initialized");
 
     // metrics task:
     // - spawns powermetrics as subprocess
@@ -46,6 +66,7 @@ async fn main() -> Result<(), InternalError> {
     // - convert PowermetricsSample into EnergySample
     // - send over spsc channel
 
+    info!("spawning metrics task");
     let shutdown = shutdown_rx.clone();
     join_set.spawn(async move {
         subprocess::metrics_task(sample_sender, session_rx, shutdown, sample_rate).await
@@ -58,28 +79,42 @@ async fn main() -> Result<(), InternalError> {
     // - flush to database
     // - on quit, update end time in MonitoringSession
 
+    // database writing is a synchronous operation and should always be on 1 thread,
+    // regardless of the runtime used.
+    let local = tokio::task::LocalSet::new();
+    info!("spawning writer task");
     let shutdown = shutdown_rx.clone();
-    join_set.spawn(async move {
-        db::writer_task(sample_receiver, &db_path, session_tx, shutdown).await
-    });
+    local
+        .run_until(async {
+            tokio::task::spawn_local(async move {
+                db::writer_task(sample_receiver, &db_path, session_tx, shutdown).await
+            });
+        })
+        .await;
 
+    info!("spawning idle detection task");
     join_set.spawn(async move { idle::idle_task(sample_rate_tx, shutdown_rx).await });
 
     // signal handler:
     // - process SIGTERM
     // - flush database and update MonitoringSession
+    info!("setting up signal handler for SIGTERM");
     let mut sigterm = signal(SignalKind::terminate())?;
 
+    info!("all tasks spawned, entering main event loop");
     tokio::select! {
         Some(join_result) = join_set.join_next() => {
+            error!("unexpected task termination, initiating shutdown");
             let _ = shutdown_tx.send(true);
             let _ = join_set.join_all().await;
+            let _ = local.await;
             match join_result {
                 Ok(Ok(())) => {
                     error!("some task exited for no reason");
                     return Err(InternalError::TaskError);
                 }
                 Ok(Err(err)) => {
+                    error!("task returned error: {err}");
                     return Err(err);
                 }
                 Err(err) => {
@@ -89,9 +124,11 @@ async fn main() -> Result<(), InternalError> {
             }
         }
         _ = sigterm.recv() => {
-            tracing::info!("SIGTERM received, shutting down");
+            info!("SIGTERM received, initiating graceful shutdown");
             let _ = shutdown_tx.send(true);
             let _ = join_set.join_all().await;
+            let _ = local.await;
+            info!("graceful shutdown complete");
             return Ok(());
         }
     }
