@@ -1,6 +1,8 @@
 //! detect when the system is idle and adjust sampling frequency
 
 use tokio::sync::watch;
+use tracing::debug;
+use tracing::info;
 use tracing::warn;
 
 use crate::InternalError;
@@ -11,13 +13,14 @@ pub async fn idle_task(
     sample_rate: watch::Sender<u64>,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), InternalError> {
-    let mut interval = tokio::time::interval(
-        std::time::Duration::from_secs(20), // check for idle every 60s
-    );
+    info!("idle task: starting idle detection");
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(20));
+    debug!("idle task: check interval set to 20 seconds");
     shutdown.mark_unchanged();
     loop {
         tokio::select! {
             _ = shutdown.changed() => {
+                info!("idle task: shutdown signal received");
                 break;
             }
             _ = interval.tick() => {
@@ -34,14 +37,15 @@ pub async fn idle_task(
                     5_000 // active (default)
                 };
                 if let Err(e) = sample_rate.send(new_rate) {
-                    warn!("failed to send sample rate: {e}");
+                    warn!("idle task: failed to send sample rate update: {e}");
                     break;
-                };
-                tracing::debug!(idle_secs, new_rate, "updated sampling rate");
+                }
+                debug!(idle_secs, new_rate_ms = new_rate, "idle task: adjusted sampling rate");
             }
         }
     }
 
+    info!("idle task: exiting");
     Ok(())
 }
 

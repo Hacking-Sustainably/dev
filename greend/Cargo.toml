@@ -14,3 +14,7 @@ tokio = { version = "1.50.0", features = ["process", "io-std", "fs", "rt", "io-u
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
