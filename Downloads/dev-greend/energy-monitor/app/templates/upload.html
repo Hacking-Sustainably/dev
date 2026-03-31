@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block title %}Upload Data — greenB{% endblock %}
+
+{% block extra_head %}
+<style>
+    .upload-input {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 0.8rem;
+        padding: 0.45rem 0.65rem;
+        font-family: var(--sans);
+    }
+    .upload-input::placeholder { color: var(--muted); opacity: 0.6; }
+    .upload-input:focus {
+        background: rgba(255,255,255,0.06);
+        border-color: var(--accent);
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(0,212,255,0.12);
+        color: var(--text);
+    }
+    .upload-label {
+        font-size: 0.68rem;
+        font-weight: 500;
+        color: var(--muted);
+        margin-bottom: 0.25rem;
+    }
+    textarea.upload-input { font-family: var(--mono); font-size: 0.72rem; }
+    .upload-hint { font-size: 0.72rem; color: var(--text-dim); line-height: 1.5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-2 mb-2">
+    <!-- CSV upload -->
+    <div class="col-lg-6">
+        <div class="tile tile-pad h-100">
+            <div class="tile-title">CSV Upload</div>
+            <p class="upload-hint mb-3">Upload a CSV file with energy monitoring samples. Required columns:
+                <code>timestamp</code>, <code>app_name</code>. Optional: <code>power_watts</code>,
+                <code>energy_joules</code>, <code>cpu_percent</code>, <code>memory_mb</code>,
+                <code>gpu_percent</code>, <code>disk_read_mb</code>, <code>disk_write_mb</code>,
+                <code>network_sent_mb</code>, <code>network_recv_mb</code>, <code>pid</code>,
+                <code>category</code>, <code>is_background</code>.
+            </p>
+            <form id="csv-form" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label class="upload-label">Session Name</label>
+                    <input type="text" name="session_name" class="upload-input w-100" placeholder="My monitoring session">
+                </div>
+                <div class="mb-3">
+                    <label class="upload-label">Device Name <span style="color:var(--muted);font-size:0.6rem;">(optional)</span></label>
+                    <input type="text" name="device_name" class="upload-input w-100" placeholder="e.g. MacBook Pro 2023">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col">
+                        <label class="upload-label">OS <span style="color:var(--muted);font-size:0.6rem;">(optional)</span></label>
+                        <input type="text" name="os_name" class="upload-input w-100" placeholder="macOS">
+                    </div>
+                    <div class="col">
+                        <label class="upload-label">OS Version</label>
+                        <input type="text" name="os_version" class="upload-input w-100" placeholder="14.4">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="upload-label">CSV File</label>
+                    <input type="file" name="file" accept=".csv" class="upload-input w-100" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Upload CSV</button>
+            </form>
+            <div id="csv-result" class="mt-3"></div>
+        </div>
+    </div>
+
+    <!-- JSON upload -->
+    <div class="col-lg-6">
+        <div class="tile tile-pad h-100">
+            <div class="tile-title">JSON Upload</div>
+            <p class="upload-hint mb-2">Paste or upload JSON data. Expected format:</p>
+<pre style="background:rgba(255,255,255,0.03);border-radius:6px;padding:0.7rem 0.9rem;font-size:0.68rem;color:var(--text-dim);margin-bottom:0.8rem;overflow-x:auto;"><code style="background:none;padding:0;font-size:inherit;color:inherit;">{
+  "session": {
+    "name": "Session name",
+    "device_name": "My Device",
+    "os_name": "macOS",
+    "os_version": "14.4"
+  },
+  "samples": [
+    {
+      "timestamp": "2026-03-17T10:00:00",
+      "app_name": "Chrome",
+      "power_watts": 5.2,
+      "cpu_percent": 12.5,
+      "memory_mb": 450,
+      "category": "browser"
+    }
+  ]
+}</code></pre>
+            <div class="mb-3">
+                <label class="upload-label">JSON Data</label>
+                <textarea id="json-input" class="upload-input w-100" rows="8"
+                          placeholder="Paste JSON here..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="upload-label">Or upload a JSON file</label>
+                <input type="file" id="json-file" accept=".json" class="upload-input w-100">
+            </div>
+            <button onclick="uploadJSON()" class="btn btn-primary">Upload JSON</button>
+            <div id="json-result" class="mt-3"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Sample data generator -->
+<div class="tile tile-pad">
+    <div class="tile-title">Generate Sample Data</div>
+    <p class="upload-hint mb-3">
+        Don't have monitoring data yet? Generate realistic sample data to explore the dashboard.
+    </p>
+    <div class="d-flex flex-wrap align-items-end gap-3">
+        <div>
+            <label class="upload-label">Number of samples</label>
+            <input type="number" id="sample-count" class="upload-input" value="500" min="10" max="50000" style="width:110px;">
+        </div>
+        <div>
+            <label class="upload-label">Number of apps</label>
+            <input type="number" id="app-count" class="upload-input" value="8" min="2" max="30" style="width:110px;">
+        </div>
+        <div>
+            <label class="upload-label">Duration (hours)</label>
+            <input type="number" id="duration-hours" class="upload-input" value="1" min="0.1" max="720" step="0.5" style="width:110px;">
+        </div>
+        <button onclick="generateSample()" class="btn btn-primary" style="background:var(--accent2);color:var(--bg);">Generate &amp; Upload</button>
+    </div>
+    <div id="sample-result" class="mt-3"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// CSV upload
+document.getElementById('csv-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const form = new FormData(this);
+    const resultDiv = document.getElementById('csv-result');
+    resultDiv.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;">Uploading\u2026</div>';
+
+    fetch('/api/upload/csv', { method: 'POST', body: form })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                resultDiv.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+            } else {
+                resultDiv.innerHTML = '<div class="alert alert-success">' + data.message +
+                    ' <a href="/session/' + data.session.id + '">View session \u2192</a></div>';
+            }
+        })
+        .catch(err => {
+            resultDiv.innerHTML = '<div class="alert alert-danger">Error: ' + err.message + '</div>';
+        });
+});
+
+// JSON upload
+function uploadJSON() {
+    const resultDiv = document.getElementById('json-result');
+    const textarea = document.getElementById('json-input');
+    const fileInput = document.getElementById('json-file');
+
+    if (fileInput.files.length > 0) {
+        const reader = new FileReader();
+        reader.onload = function(e) { sendJSON(e.target.result, resultDiv); };
+        reader.readAsText(fileInput.files[0]);
+    } else if (textarea.value.trim()) {
+        sendJSON(textarea.value, resultDiv);
+    } else {
+        resultDiv.innerHTML = '<div class="alert alert-warning">Please paste JSON or select a file.</div>';
+    }
+}
+
+function sendJSON(jsonStr, resultDiv) {
+    resultDiv.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;">Uploading\u2026</div>';
+    try {
+        const data = JSON.parse(jsonStr);
+        fetch('/api/upload/json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                resultDiv.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+            } else {
+                resultDiv.innerHTML = '<div class="alert alert-success">' + data.message +
+                    ' <a href="/session/' + data.session.id + '">View session \u2192</a></div>';
+            }
+        });
+    } catch(e) {
+        resultDiv.innerHTML = '<div class="alert alert-danger">Invalid JSON: ' + e.message + '</div>';
+    }
+}
+
+// Sample data generator
+function generateSample() {
+    const n = parseInt(document.getElementById('sample-count').value) || 500;
+    const appCount = parseInt(document.getElementById('app-count').value) || 8;
+    const durationHours = parseFloat(document.getElementById('duration-hours').value) || 1;
+    const resultDiv = document.getElementById('sample-result');
+    resultDiv.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;">Generating\u2026</div>';
+
+    const appProfiles = [
+        { name: 'Chrome', cat: 'browser', basePower: 4.5, baseCpu: 15, baseMem: 800 },
+        { name: 'Firefox', cat: 'browser', basePower: 3.2, baseCpu: 10, baseMem: 600 },
+        { name: 'VS Code', cat: 'ide', basePower: 2.8, baseCpu: 8, baseMem: 500 },
+        { name: 'Slack', cat: 'communication', basePower: 1.5, baseCpu: 5, baseMem: 350 },
+        { name: 'Spotify', cat: 'media', basePower: 1.2, baseCpu: 3, baseMem: 250 },
+        { name: 'Docker Desktop', cat: 'dev-tools', basePower: 6.0, baseCpu: 20, baseMem: 2000 },
+        { name: 'Zoom', cat: 'communication', basePower: 5.5, baseCpu: 25, baseMem: 600 },
+        { name: 'Terminal', cat: 'dev-tools', basePower: 0.5, baseCpu: 2, baseMem: 80 },
+        { name: 'Finder', cat: 'system', basePower: 0.2, baseCpu: 1, baseMem: 60 },
+        { name: 'Mail', cat: 'communication', basePower: 0.8, baseCpu: 2, baseMem: 150 },
+        { name: 'Preview', cat: 'utility', basePower: 0.3, baseCpu: 1, baseMem: 100 },
+        { name: 'Figma', cat: 'design', basePower: 3.5, baseCpu: 12, baseMem: 700 },
+        { name: 'IntelliJ IDEA', cat: 'ide', basePower: 5.0, baseCpu: 18, baseMem: 1500 },
+        { name: 'Notion', cat: 'productivity', basePower: 1.8, baseCpu: 4, baseMem: 300 },
+        { name: 'Discord', cat: 'communication', basePower: 2.0, baseCpu: 6, baseMem: 400 },
+    ];
+
+    const selectedApps = appProfiles.slice(0, Math.min(appCount, appProfiles.length));
+    const now = new Date();
+    const durationMs = durationHours * 3600000;
+    const start = new Date(now.getTime() - durationMs);
+    const interval = durationMs / n;
+
+    const samples = [];
+    for (let i = 0; i < n; i++) {
+        const app = selectedApps[i % selectedApps.length];
+        const ts = new Date(start.getTime() + i * interval);
+        const noise = function() { return (Math.random() - 0.5) * 0.4 + 1; };
+        const power = Math.max(0, app.basePower * noise());
+        samples.push({
+            timestamp: ts.toISOString(),
+            app_name: app.name,
+            power_watts: Math.round(power * 1000) / 1000,
+            energy_joules: Math.round(power * (interval / 1000) * 100) / 100,
+            cpu_percent: Math.round(Math.max(0, app.baseCpu * noise()) * 10) / 10,
+            memory_mb: Math.round(Math.max(0, app.baseMem * noise())),
+            gpu_percent: Math.round(Math.random() * 5 * 10) / 10,
+            disk_read_mb: Math.round(Math.random() * 2 * 100) / 100,
+            disk_write_mb: Math.round(Math.random() * 1 * 100) / 100,
+            network_sent_mb: Math.round(Math.random() * 0.5 * 100) / 100,
+            network_recv_mb: Math.round(Math.random() * 2 * 100) / 100,
+            category: app.cat,
+            is_background: Math.random() < 0.2,
+        });
+    }
+
+    const payload = {
+        session: {
+            name: 'Sample Session (' + n + ' samples, ' + durationHours + 'h)',
+            device_name: 'Demo Device',
+            os_name: 'macOS',
+            os_version: '14.4',
+        },
+        samples: samples,
+    };
+
+    fetch('/api/upload/json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            resultDiv.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-success">' + data.message +
+                ' <a href="/session/' + data.session.id + '">View session \u2192</a>' +
+                ' | <a href="/">Go to dashboard \u2192</a></div>';
+        }
+    });
+}
+</script>
+{% endblock %}
