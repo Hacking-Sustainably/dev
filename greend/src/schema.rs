@@ -14,6 +14,7 @@ pub struct MonitoringSession {
     pub os_version: Option<String>,
     pub started_at: Timestamp,
     pub ended_at: Option<Timestamp>,
+    pub last_sample: Option<Timestamp>,
     pub created_at: Timestamp,
 }
 

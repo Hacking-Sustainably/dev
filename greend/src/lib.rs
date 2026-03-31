@@ -4,7 +4,9 @@
 
 use std::path::PathBuf;
 
+use chrono::Local;
 use tokio::sync::oneshot;
+use tracing_subscriber::fmt::time::FormatTime;
 
 pub mod db;
 pub mod idle;
@@ -13,9 +15,9 @@ pub mod subprocess;
 
 /// how many samples to buffer before flushing to the database file
 #[cfg(not(debug_assertions))]
-pub const SAMPLE_BUFFER_SIZE: usize = 1000;
+pub const SAMPLE_BUFFER_SIZE: usize = 2000;
 #[cfg(debug_assertions)]
-pub const SAMPLE_BUFFER_SIZE: usize = 5;
+pub const SAMPLE_BUFFER_SIZE: usize = 100;
 
 #[derive(Debug, thiserror::Error)]
 pub enum InternalError {
@@ -53,4 +55,22 @@ pub fn get_database_path() -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(&db_dir)?;
 
     Ok(db_dir.join("energy_monitor.db"))
+}
+
+pub struct LocalTimer;
+
+impl FormatTime for LocalTimer {
+    fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer) -> std::fmt::Result {
+        write!(w, "{}", Local::now().format("%H:%M:%S%.3f"))
+    }
+}
+
+pub async fn wait_for_signal(
+    sigterm: &mut tokio::signal::unix::Signal,
+    sigint: &mut tokio::signal::unix::Signal,
+) {
+    tokio::select! {
+        _ = sigterm.recv() => {},
+        _ = sigint.recv() => {},
+    }
 }
