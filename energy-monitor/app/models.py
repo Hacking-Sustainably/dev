@@ -12,6 +12,7 @@ class MonitoringSession(db.Model):
     os_name = db.Column(db.String(100), nullable=True)
     os_version = db.Column(db.String(100), nullable=True)
     started_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_sample = db.Column(db.DateTime, nullable=True)
     ended_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -23,6 +24,8 @@ class MonitoringSession(db.Model):
     def duration_seconds(self):
         if self.ended_at and self.started_at:
             return (self.ended_at - self.started_at).total_seconds()
+        elif self.last_sample and self.started_at:
+            return (self.last_sample - self.started_at).total_seconds()
         return None
 
     def to_dict(self):

@@ -34,6 +34,7 @@ fn init_schema(conn: &Connection) -> rusqlite::Result<()> {
             os_name     TEXT,
             os_version  TEXT,
             started_at  TEXT    NOT NULL,
+            last_sample TEXT,
             ended_at    TEXT,
             created_at  TEXT    NOT NULL
         );
@@ -84,18 +85,20 @@ fn insert_session(conn: &Connection, session: &MonitoringSession) -> rusqlite::R
     debug!("db: inserting new monitoring session: {}", session.name);
     let started_at = session.started_at.to_rfc3339();
     let created_at = session.created_at.to_rfc3339();
+    let last_sample = session.last_sample.as_ref().map(|t| t.to_rfc3339());
     let ended_at = session.ended_at.as_ref().map(|t| t.to_rfc3339());
 
     conn.execute(
         "INSERT INTO monitoring_sessions
-             (name, device_name, os_name, os_version, started_at, ended_at, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+             (name, device_name, os_name, os_version, started_at, last_sample, ended_at, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             session.name,
             session.device_name,
             session.os_name,
             session.os_version,
             started_at,
+            last_sample,
             ended_at,
             created_at,
         ],
@@ -104,6 +107,30 @@ fn insert_session(conn: &Connection, session: &MonitoringSession) -> rusqlite::R
     let session_id = conn.last_insert_rowid();
     info!(session_id, os = %session.os_name.as_ref().unwrap_or(&"unknown".to_string()), "db: monitoring session created");
     Ok(session_id)
+}
+
+/// Updates the `last_sample` column on a session row
+fn register_last_sample(
+    conn: &Connection,
+    session_id: i64,
+    last_sample: Timestamp,
+) -> rusqlite::Result<()> {
+    debug!(session_id, "db: registering last sample");
+    let result = conn.execute(
+        "UPDATE monitoring_sessions SET last_sample = ?1 WHERE id = ?2",
+        params![last_sample.to_rfc3339(), session_id],
+    );
+
+    match result {
+        Ok(_) => {
+            debug!(session_id, "db: last sample registered");
+            Ok(())
+        }
+        Err(e) => {
+            error!(session_id, error = %e, "db: failed to register last sample");
+            Err(e)
+        }
+    }
 }
 
 /// Updates the `ended_at` column on a session row once monitoring stops.
@@ -158,6 +185,7 @@ pub async fn writer_task(
         os_version: None,
         started_at: Utc::now(),
         ended_at: None,
+        last_sample: None,
         created_at: Utc::now(),
     };
 
@@ -216,15 +244,18 @@ pub async fn writer_task(
         "db: buffer initialized, entering receive loop"
     );
     shutdown.mark_unchanged();
+    let mut last_sample;
     loop {
         tokio::select! {
             x = rx.recv() => {
                 if let Some(sample) = x {
+                    last_sample = sample.timestamp;
                     buffer.push(sample);
                     total_samples += 1;
 
                     if buffer.len() >= SAMPLE_BUFFER_SIZE {
                         debug!(session_id, buffer_size = buffer.len(), "db: buffer full, flushing to database");
+                        register_last_sample(&conn, session_id, last_sample)?;
                         if let Err(e) = flush(&conn, &mut stmt, session_id, &mut buffer) {
                             error!(session_id, error = %e, "db: flush error");
                             return Err(e.into());

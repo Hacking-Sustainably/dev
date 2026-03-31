@@ -3,11 +3,13 @@
 //! writes it to the greenb database for later processing
 
 use greend::InternalError;
+use greend::LocalTimer;
 use greend::SAMPLE_BUFFER_SIZE;
 use greend::db;
 use greend::get_database_path;
 use greend::idle;
 use greend::subprocess;
+use greend::wait_for_signal;
 use tokio::signal::unix::SignalKind;
 use tokio::signal::unix::signal;
 use tokio::sync::mpsc;
@@ -35,6 +37,7 @@ async fn main() -> Result<(), InternalError> {
             tracing_subscriber::fmt::layer()
                 .with_writer(std::io::stderr)
                 .with_target(true)
+                .with_timer(LocalTimer)
                 .with_level(true), // .with_thread_ids(true),
         )
         .init();
@@ -98,8 +101,9 @@ async fn main() -> Result<(), InternalError> {
     // signal handler:
     // - process SIGTERM
     // - flush database and update MonitoringSession
-    info!("setting up signal handler for SIGTERM");
+    info!("setting up signal handler for SIGINT/SIGTERM");
     let mut sigterm = signal(SignalKind::terminate())?;
+    let mut sigint = signal(SignalKind::interrupt())?;
 
     info!("all tasks spawned, entering main event loop");
     local
@@ -135,8 +139,8 @@ async fn main() -> Result<(), InternalError> {
                         }
                     }
                 }
-                _ = sigterm.recv() => {
-                    info!("SIGTERM received, initiating graceful shutdown");
+                _ = wait_for_signal(&mut sigterm, &mut sigint) => {
+                    info!("SIGINT/SIGTERM received, initiating graceful shutdown");
                     let _ = shutdown_tx.send(true);
                     let _ = join_set.join_all().await;
                     let _ = writer_handle.await;

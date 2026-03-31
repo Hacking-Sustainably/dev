@@ -15,3 +15,4 @@ target/
 .idea/
 summary.toml
 summary.md
+energy-monitor/app/static/icons/

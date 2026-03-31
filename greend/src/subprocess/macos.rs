@@ -6,6 +6,9 @@ use std::time::Duration;
 use chrono::DateTime;
 use chrono::Utc;
 use serde::Deserialize;
+use sysinfo::ProcessRefreshKind;
+use sysinfo::ProcessesToUpdate;
+use sysinfo::System;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::process::Child;
@@ -38,13 +41,48 @@ pub struct ProcessorMetrics {
     pub combined_power: f64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct ProcessSample {
     pid: i32,
     name: String,
     cputime_ms_per_s: f64,
+
+    intr_wakeups: i64,
+    intr_wakeups_per_s: f64,
+    idle_wakeups: i64,
+    idle_wakeups_per_s: f64,
+
+    timer_wakeups: Vec<TimerWakeup>,
+
+    #[serde(default)]
+    diskio_bytesread: i64,
+    #[serde(default)]
+    diskio_byteswritten: i64,
+
+    #[serde(default)]
+    pageins: i64,
+    #[serde(default)]
+    pageins_per_s: f64,
+
+    #[serde(default)]
+    bytes_received: i64,
+    #[serde(default)]
+    bytes_sent: i64,
+
+    #[serde(default)]
+    energy_impact: f64,
+
     #[serde(default)]
     gputime_ms_per_s: f64,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct TimerWakeup {
+    interval_ns: f64,
+    wakeups: i64,
+    wakeups_per_s: f64,
 }
 
 pub async fn spawn_powermetrics(
@@ -60,6 +98,8 @@ pub async fn spawn_powermetrics(
         pid = child.id(),
         "powermetrics: process spawned"
     );
+
+    let mut sys = System::new();
 
     let mut reader = BufReader::new(stdout);
     let mut buf = Vec::with_capacity(512 * 1024); // 512KB initial
@@ -115,7 +155,7 @@ pub async fn spawn_powermetrics(
                         buf.clear();
                         buf.shrink_to(512);
 
-                        convert_samples(session_id, sample, &mut sample_buf);
+                        convert_samples(&mut sys, session_id, sample, &mut sample_buf);
                         let sample_count_batch = sample_buf.len();
 
                         for sample in sample_buf.drain(..) {
@@ -156,7 +196,10 @@ fn start_child(interval_ms: u64) -> std::io::Result<(Child, ChildStdout)> {
         .args([
             "powermetrics",
             "--samplers",
-            "cpu_power,gpu_power,tasks",
+            "default",
+            "--show-process-gpu",
+            "--show-process-netstats",
+            "--show-process-energy",
             "--format",
             "plist",
             "-i",
@@ -176,30 +219,53 @@ fn parse_sample(buf: &[u8]) -> Result<PowermetricsSample, plist::Error> {
     plist::from_bytes(data)
 }
 
-fn convert_samples(session_id: i64, value: PowermetricsSample, buf: &mut Vec<EnergySample>) {
+fn convert_samples(
+    system: &mut System,
+    session_id: i64,
+    sample: PowermetricsSample,
+    buf: &mut Vec<EnergySample>,
+) {
     trace!(
         session_id,
-        sample_count = value.tasks.len(),
+        sample_count = sample.tasks.len(),
         "converting powermetrics sample"
     );
-    let timestamp: Timestamp = DateTime::parse_from_rfc3339(&value.timestamp)
+    let timestamp: Timestamp = DateTime::parse_from_rfc3339(&sample.timestamp)
         .expect("invalid timestamp")
         .with_timezone(&Utc);
 
-    let duration_s = value.elapsed_ns as f64 / 1_000_000_000.0;
+    let duration_s = sample.elapsed_ns as f64 / 1_000_000_000.0;
 
-    let total_cpu: f64 = value.tasks.iter().map(|t| t.cputime_ms_per_s).sum();
+    let total_cpu: f64 = sample.tasks.iter().map(|t| t.cputime_ms_per_s).sum();
 
-    let total_gpu: f64 = value.tasks.iter().map(|t| t.gputime_ms_per_s).sum();
+    let total_gpu: f64 = sample.tasks.iter().map(|t| t.gputime_ms_per_s).sum();
 
-    let cpu_power = value.processor.cpu_power;
-    let gpu_power = value.processor.gpu_power;
-    let _total_power: f64 = value.processor.combined_power;
+    let cpu_power = sample.processor.cpu_power;
+    let gpu_power = sample.processor.gpu_power;
+    let _total_power: f64 = sample.processor.combined_power;
 
-    for proc in value.tasks {
+    let pids: Vec<sysinfo::Pid> = sample
+        .tasks
+        .iter()
+        .map(|t| sysinfo::Pid::from(t.pid as usize))
+        .collect();
+
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&pids),
+        true,
+        ProcessRefreshKind::nothing().with_memory(),
+    );
+
+    for proc in sample.tasks {
         if total_cpu == 0.0 {
             continue;
         }
+
+        // query process metrics from proc_pidinfo
+        let pid = sysinfo::Pid::from(proc.pid as usize);
+        let memory_mb = system
+            .process(pid)
+            .map(|p| p.memory() as f64 / 1024.0 / 1024.0);
 
         let cpu_ratio = if total_cpu > 0.0 {
             proc.cputime_ms_per_s / total_cpu
@@ -213,11 +279,26 @@ fn convert_samples(session_id: i64, value: PowermetricsSample, buf: &mut Vec<Ene
             0.0
         };
 
+        let total_wakeups = proc.intr_wakeups + proc.idle_wakeups;
+
+        let _idle_wakeup_ratio = if total_wakeups > 0 {
+            proc.idle_wakeups as f64 / total_wakeups as f64
+        } else {
+            0.0
+        };
+
+        let _intr_wakeup_ratio = if total_wakeups > 0 {
+            proc.intr_wakeups as f64 / total_wakeups as f64
+        } else {
+            0.0
+        };
+
         let process_power = cpu_power * cpu_ratio + gpu_power * gpu_ratio;
 
         let energy_joules = process_power * duration_s;
 
         let cpu_percent = proc.cputime_ms_per_s / 1000.0 * 100.0;
+        let gpu_percent = proc.gputime_ms_per_s / 1000.0 * 100.0;
 
         buf.push(EnergySample {
             id: None,
@@ -230,15 +311,15 @@ fn convert_samples(session_id: i64, value: PowermetricsSample, buf: &mut Vec<Ene
             energy_joules: Some(energy_joules),
             cpu_percent: Some(cpu_percent),
 
-            memory_mb: None,
-            gpu_percent: None,
-            disk_read_mb: None,
-            disk_write_mb: None,
-            network_sent_mb: None,
-            network_recv_mb: None,
+            memory_mb,
+            gpu_percent: Some(gpu_percent),
+            disk_read_mb: Some(proc.diskio_bytesread as f64 / 1024.0 / 1024.0),
+            disk_write_mb: Some(proc.diskio_byteswritten as f64 / 1024.0 / 1024.0),
+            network_sent_mb: Some(proc.bytes_sent as f64 / 1024.0 / 1024.0),
+            network_recv_mb: Some(proc.bytes_received as f64 / 1024.0 / 1024.0),
 
             category: None,
-            is_background: true,
+            is_background: false,
         });
     }
 }
