@@ -12,8 +12,9 @@ os.makedirs(instance_dir, exist_ok=True)
 
 with app.app_context():
     from app import db
-    db_path = f"sqlite://{get_database_path()}"
+    db_path = get_database_path()
     if not os.path.exists(db_path):
+        print(f"✗ Database not found at {db_path}")
         db.create_all()
         print(f"✓ Database created at {db_path}")
     else:
