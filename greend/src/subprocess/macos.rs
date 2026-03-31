@@ -27,9 +27,9 @@ use crate::schema::Timestamp;
 
 #[derive(Debug, Deserialize)]
 pub struct PowermetricsSample {
-    timestamp: String,
-    elapsed_ns: u64,
-    tasks: Vec<ProcessSample>,
+    pub timestamp: String,
+    pub elapsed_ns: u64,
+    pub coalitions: Vec<CoalitionSample>,
 
     pub processor: ProcessorMetrics,
 }
@@ -43,46 +43,72 @@ pub struct ProcessorMetrics {
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-struct ProcessSample {
-    pid: i32,
-    name: String,
-    cputime_ms_per_s: f64,
+pub struct CoalitionSample {
+    #[serde(default)]
+    pub id: Option<u64>,
 
-    intr_wakeups: i64,
-    intr_wakeups_per_s: f64,
-    idle_wakeups: i64,
-    idle_wakeups_per_s: f64,
+    pub name: String, // bundle ID, e.g. "com.apple.mail"
 
-    timer_wakeups: Vec<TimerWakeup>,
+    pub cputime_ms_per_s: f64,
+    pub energy_impact: f64,
 
     #[serde(default)]
-    diskio_bytesread: i64,
+    pub intr_wakeups: i64,
     #[serde(default)]
-    diskio_byteswritten: i64,
+    pub idle_wakeups: i64,
+    #[serde(default)]
+    pub diskio_bytesread: i64,
+    #[serde(default)]
+    pub diskio_byteswritten: i64,
 
     #[serde(default)]
-    pageins: i64,
-    #[serde(default)]
-    pageins_per_s: f64,
+    pub gputime_ms_per_s: f64,
 
-    #[serde(default)]
-    bytes_received: i64,
-    #[serde(default)]
-    bytes_sent: i64,
-
-    #[serde(default)]
-    energy_impact: f64,
-
-    #[serde(default)]
-    gputime_ms_per_s: f64,
+    pub tasks: Vec<ProcessSample>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
-struct TimerWakeup {
-    interval_ns: f64,
-    wakeups: i64,
-    wakeups_per_s: f64,
+pub struct ProcessSample {
+    pub pid: i32,
+    pub name: String,
+    pub cputime_ms_per_s: f64,
+
+    pub intr_wakeups: i64,
+    pub intr_wakeups_per_s: f64,
+    pub idle_wakeups: i64,
+    pub idle_wakeups_per_s: f64,
+
+    pub timer_wakeups: Vec<TimerWakeup>,
+
+    #[serde(default)]
+    pub diskio_bytesread: i64,
+    #[serde(default)]
+    pub diskio_byteswritten: i64,
+
+    #[serde(default)]
+    pub pageins: i64,
+    #[serde(default)]
+    pub pageins_per_s: f64,
+
+    #[serde(default)]
+    pub bytes_received: i64,
+    #[serde(default)]
+    pub bytes_sent: i64,
+
+    #[serde(default)]
+    pub energy_impact: f64,
+
+    #[serde(default)]
+    pub gputime_ms_per_s: f64,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct TimerWakeup {
+    pub interval_ns: f64,
+    pub wakeups: i64,
+    pub wakeups_per_s: f64,
 }
 
 pub async fn spawn_powermetrics(
@@ -200,6 +226,7 @@ fn start_child(interval_ms: u64) -> std::io::Result<(Child, ChildStdout)> {
             "--show-process-gpu",
             "--show-process-netstats",
             "--show-process-energy",
+            "--show-process-coalition",
             "--format",
             "plist",
             "-i",
@@ -227,7 +254,7 @@ fn convert_samples(
 ) {
     trace!(
         session_id,
-        sample_count = sample.tasks.len(),
+        sample_count = sample.coalitions.len(),
         "converting powermetrics sample"
     );
     let timestamp: Timestamp = DateTime::parse_from_rfc3339(&sample.timestamp)
@@ -236,17 +263,18 @@ fn convert_samples(
 
     let duration_s = sample.elapsed_ns as f64 / 1_000_000_000.0;
 
-    let total_cpu: f64 = sample.tasks.iter().map(|t| t.cputime_ms_per_s).sum();
+    let total_cpu: f64 = sample.coalitions.iter().map(|t| t.cputime_ms_per_s).sum();
 
-    let total_gpu: f64 = sample.tasks.iter().map(|t| t.gputime_ms_per_s).sum();
+    let total_gpu: f64 = sample.coalitions.iter().map(|t| t.gputime_ms_per_s).sum();
 
     let cpu_power = sample.processor.cpu_power;
     let gpu_power = sample.processor.gpu_power;
     let _total_power: f64 = sample.processor.combined_power;
 
     let pids: Vec<sysinfo::Pid> = sample
-        .tasks
+        .coalitions
         .iter()
+        .flat_map(|c| c.tasks.iter())
         .map(|t| sysinfo::Pid::from(t.pid as usize))
         .collect();
 
@@ -256,71 +284,93 @@ fn convert_samples(
         ProcessRefreshKind::nothing().with_memory(),
     );
 
-    for proc in sample.tasks {
-        if total_cpu == 0.0 {
-            continue;
+    for coal in sample.coalitions {
+        // try to figure out the actual app name
+        let app_name = coal
+            .name
+            .split('.')
+            .next_back()
+            .unwrap_or_else(|| &coal.name)
+            .to_string();
+
+        let category = if coal.name.starts_with("com.apple.") {
+            Some("system".to_string())
+        } else if coal.name.contains("Safari")
+            || coal.name.contains("Chrome")
+            || coal.name.contains("Firefox")
+        {
+            Some("browser".to_string())
+        } else {
+            None
+        };
+
+        for proc in coal.tasks {
+            if total_cpu == 0.0 {
+                continue;
+            }
+
+            // query process metrics from proc_pidinfo
+            let pid = sysinfo::Pid::from(proc.pid as usize);
+            let memory_mb = system
+                .process(pid)
+                .map(|p| p.memory() as f64 / 1024.0 / 1024.0);
+
+            let cpu_ratio = if total_cpu > 0.0 {
+                proc.cputime_ms_per_s / total_cpu
+            } else {
+                0.0
+            };
+
+            let gpu_ratio = if total_gpu > 0.0 {
+                proc.gputime_ms_per_s / total_gpu
+            } else {
+                0.0
+            };
+
+            let total_wakeups = proc.intr_wakeups + proc.idle_wakeups;
+
+            let _idle_wakeup_ratio = if total_wakeups > 0 {
+                proc.idle_wakeups as f64 / total_wakeups as f64
+            } else {
+                0.0
+            };
+
+            let _intr_wakeup_ratio = if total_wakeups > 0 {
+                proc.intr_wakeups as f64 / total_wakeups as f64
+            } else {
+                0.0
+            };
+
+            let process_power = cpu_power * cpu_ratio + gpu_power * gpu_ratio;
+
+            let energy_joules = process_power * duration_s;
+
+            let cpu_percent = proc.cputime_ms_per_s / 1000.0 * 100.0;
+            let gpu_percent = proc.gputime_ms_per_s / 1000.0 * 100.0;
+
+            buf.push(EnergySample {
+                id: None,
+                session_id,
+                timestamp,
+                app_name: app_name.clone(),
+
+                pid: Some(proc.pid),
+
+                power_watts: Some(process_power),
+                energy_joules: Some(energy_joules),
+                cpu_percent: Some(cpu_percent),
+
+                memory_mb,
+                gpu_percent: Some(gpu_percent),
+                disk_read_mb: Some(proc.diskio_bytesread as f64 / 1024.0 / 1024.0),
+                disk_write_mb: Some(proc.diskio_byteswritten as f64 / 1024.0 / 1024.0),
+                network_sent_mb: Some(proc.bytes_sent as f64 / 1024.0 / 1024.0),
+                network_recv_mb: Some(proc.bytes_received as f64 / 1024.0 / 1024.0),
+
+                category: category.clone(),
+                is_background: false,
+            });
         }
-
-        // query process metrics from proc_pidinfo
-        let pid = sysinfo::Pid::from(proc.pid as usize);
-        let memory_mb = system
-            .process(pid)
-            .map(|p| p.memory() as f64 / 1024.0 / 1024.0);
-
-        let cpu_ratio = if total_cpu > 0.0 {
-            proc.cputime_ms_per_s / total_cpu
-        } else {
-            0.0
-        };
-
-        let gpu_ratio = if total_gpu > 0.0 {
-            proc.gputime_ms_per_s / total_gpu
-        } else {
-            0.0
-        };
-
-        let total_wakeups = proc.intr_wakeups + proc.idle_wakeups;
-
-        let _idle_wakeup_ratio = if total_wakeups > 0 {
-            proc.idle_wakeups as f64 / total_wakeups as f64
-        } else {
-            0.0
-        };
-
-        let _intr_wakeup_ratio = if total_wakeups > 0 {
-            proc.intr_wakeups as f64 / total_wakeups as f64
-        } else {
-            0.0
-        };
-
-        let process_power = cpu_power * cpu_ratio + gpu_power * gpu_ratio;
-
-        let energy_joules = process_power * duration_s;
-
-        let cpu_percent = proc.cputime_ms_per_s / 1000.0 * 100.0;
-        let gpu_percent = proc.gputime_ms_per_s / 1000.0 * 100.0;
-
-        buf.push(EnergySample {
-            id: None,
-            session_id,
-            timestamp,
-            app_name: proc.name.clone(),
-            pid: Some(proc.pid),
-
-            power_watts: Some(process_power),
-            energy_joules: Some(energy_joules),
-            cpu_percent: Some(cpu_percent),
-
-            memory_mb,
-            gpu_percent: Some(gpu_percent),
-            disk_read_mb: Some(proc.diskio_bytesread as f64 / 1024.0 / 1024.0),
-            disk_write_mb: Some(proc.diskio_byteswritten as f64 / 1024.0 / 1024.0),
-            network_sent_mb: Some(proc.bytes_sent as f64 / 1024.0 / 1024.0),
-            network_recv_mb: Some(proc.bytes_received as f64 / 1024.0 / 1024.0),
-
-            category: None,
-            is_background: false,
-        });
     }
 }
 
