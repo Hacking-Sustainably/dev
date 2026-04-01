@@ -24,7 +24,7 @@
     </div>
 </div>
 
-<!-- 4 metric charts -->
+<!-- 6 metric charts -->
 <div class="row g-2 mb-2">
     <div class="col-lg-6">
         <div class="tile">
@@ -48,6 +48,18 @@
         <div class="tile">
             <div class="tile-header">Total Energy (J)</div>
             <div style="padding:0.4rem 0.8rem 0.6rem;"><div id="chart-energy" class="chart-container"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="tile">
+            <div class="tile-header">Average Disk Read (MB)</div>
+            <div style="padding:0.4rem 0.8rem 0.6rem;"><div id="chart-disk-read" class="chart-container"></div></div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="tile">
+            <div class="tile-header">Average Disk Write (MB)</div>
+            <div style="padding:0.4rem 0.8rem 0.6rem;"><div id="chart-disk-write" class="chart-container"></div></div>
         </div>
     </div>
 </div>
@@ -151,10 +163,12 @@ function updateComparison() {
     makeBar('chart-cpu', data.map(function(d) { return d.avg_cpu_percent; }), 'CPU %');
     makeBar('chart-memory', data.map(function(d) { return d.avg_memory_mb; }), 'MB');
     makeBar('chart-energy', data.map(function(d) { return d.total_energy_joules; }), 'Joules');
+    makeBar('chart-disk-read', data.map(function(d) { return d.avg_disk_read_mb || 0; }), 'MB');
+    makeBar('chart-disk-write', data.map(function(d) { return d.avg_disk_write_mb || 0; }), 'MB');
 
     if (data.length > 0) {
-        var metrics = ['avg_power_watts', 'avg_cpu_percent', 'avg_memory_mb', 'total_energy_joules'];
-        var labels = ['Power (W)', 'CPU %', 'Memory (MB)', 'Energy (J)'];
+        var metrics = ['avg_power_watts', 'avg_cpu_percent', 'avg_memory_mb', 'total_energy_joules', 'avg_disk_read_mb', 'avg_disk_write_mb'];
+        var labels = ['Power (W)', 'CPU %', 'Memory (MB)', 'Energy (J)', 'Disk Read (MB)', 'Disk Write (MB)'];
         var maxVals = metrics.map(function(m) {
             return Math.max.apply(null, data.map(function(d) { return d[m] || 0; }).concat([0.001]));
         });

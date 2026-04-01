@@ -38,9 +38,7 @@ def delete_session(session_id):
     return jsonify({"message": "Session deleted"}), 200
 
 
-# ---------------------------------
-
-# ------------------------------------------
+# ---------------------------------------------------------------------------
 #  Upload / Ingest
 # ---------------------------------------------------------------------------
 
@@ -195,6 +193,9 @@ def app_summary():
             func.sum(EnergySample.energy_joules).label("total_energy"),
             func.avg(EnergySample.cpu_percent).label("avg_cpu"),
             func.avg(EnergySample.memory_mb).label("avg_memory"),
+            func.avg(EnergySample.gpu_percent).label("avg_gpu"),
+            func.avg(EnergySample.disk_read_mb).label("avg_disk_read"),
+            func.avg(EnergySample.disk_write_mb).label("avg_disk_write"),
         )
         .group_by(EnergySample.app_name)
         .order_by(func.sum(EnergySample.energy_joules).desc())
@@ -209,6 +210,9 @@ def app_summary():
             "total_energy_joules": round(r.total_energy or 0, 3),
             "avg_cpu_percent": round(r.avg_cpu or 0, 2),
             "avg_memory_mb": round(r.avg_memory or 0, 2),
+            "avg_gpu_percent": round(r.avg_gpu or 0, 2),
+            "avg_disk_read_mb": round(r.avg_disk_read or 0, 4),
+            "avg_disk_write_mb": round(r.avg_disk_write or 0, 4),
         }
         for r in results
     ])
@@ -237,10 +241,7 @@ def timeline_summary():
     if not samples:
         return jsonify([])
 
-    # Group raw samples by app_name, then resample each app independently
-    # so every app in a stacked chart has the same bucket boundaries.
-
-    # Determine global time range
+    # Group by app, resample into equal-width buckets
     t_min = samples[0].timestamp
     t_max = samples[-1].timestamp
     span = (t_max - t_min).total_seconds()
@@ -254,15 +255,16 @@ def timeline_summary():
                 "power_watts": s.power_watts,
                 "cpu_percent": s.cpu_percent,
                 "memory_mb": s.memory_mb,
+                "gpu_percent": s.gpu_percent,
+                "disk_read_mb": s.disk_read_mb,
+                "disk_write_mb": s.disk_write_mb,
             }
             for s in samples
         ])
 
-    bucket_size = span / MAX_POINTS  # seconds per bucket
+    bucket_size = span / MAX_POINTS
 
-    # Accumulate samples into buckets per app
-    # bucket key = (app_name, bucket_index)
-    buckets: dict = defaultdict(lambda: {"power": [], "cpu": [], "mem": []})
+    buckets: dict = defaultdict(lambda: {"power": [], "cpu": [], "mem": [], "gpu": [], "disk_r": [], "disk_w": []})
 
     for s in samples:
         offset = (s.timestamp - t_min).total_seconds()
@@ -274,6 +276,12 @@ def timeline_summary():
             buckets[key]["cpu"].append(s.cpu_percent)
         if s.memory_mb is not None:
             buckets[key]["mem"].append(s.memory_mb)
+        if s.gpu_percent is not None:
+            buckets[key]["gpu"].append(s.gpu_percent)
+        if s.disk_read_mb is not None:
+            buckets[key]["disk_r"].append(s.disk_read_mb)
+        if s.disk_write_mb is not None:
+            buckets[key]["disk_w"].append(s.disk_write_mb)
 
     # Collect all app names present
     app_names = sorted({k[0] for k in buckets})
@@ -292,6 +300,9 @@ def timeline_summary():
                 "power_watts": round(sum(b["power"]) / len(b["power"]), 4) if b["power"] else None,
                 "cpu_percent": round(sum(b["cpu"]) / len(b["cpu"]), 2) if b["cpu"] else None,
                 "memory_mb": round(sum(b["mem"]) / len(b["mem"]), 2) if b["mem"] else None,
+                "gpu_percent": round(sum(b["gpu"]) / len(b["gpu"]), 2) if b["gpu"] else None,
+                "disk_read_mb": round(sum(b["disk_r"]) / len(b["disk_r"]), 4) if b["disk_r"] else None,
+                "disk_write_mb": round(sum(b["disk_w"]) / len(b["disk_w"]), 4) if b["disk_w"] else None,
             })
 
     # Sort by timestamp then app so charts render correctly
@@ -307,12 +318,18 @@ def energy_over_time():
     """
     MAX_POINTS = 100
 
-    samples = (
+    query = (
         EnergySample.query
         .filter(EnergySample.energy_joules.isnot(None))
-        .order_by(EnergySample.timestamp.asc())
-        .all()
     )
+
+    sessions_param = request.args.get("sessions", "")
+    if sessions_param:
+        ids = [int(x) for x in sessions_param.split(",") if x.strip().isdigit()]
+        if ids:
+            query = query.filter(EnergySample.session_id.in_(ids))
+
+    samples = query.order_by(EnergySample.timestamp.asc()).all()
 
     if not samples:
         return jsonify([])
@@ -346,8 +363,6 @@ def energy_over_time():
     cum = 0.0
     result = []
     for idx in range(MAX_POINTS):
-        if counts[idx] == 0:
-            continue
         cum += buckets[idx]
         bucket_time = t_min + timedelta(seconds=idx * bucket_size + bucket_size / 2)
         result.append({

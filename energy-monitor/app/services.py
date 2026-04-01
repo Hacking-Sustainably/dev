@@ -19,6 +19,9 @@ def compute_ratings():
             func.sum(EnergySample.energy_joules).label("total_energy"),
             func.avg(EnergySample.cpu_percent).label("avg_cpu"),
             func.avg(EnergySample.memory_mb).label("avg_memory"),
+            func.avg(EnergySample.gpu_percent).label("avg_gpu"),
+            func.avg(EnergySample.disk_read_mb).label("avg_disk_read"),
+            func.avg(EnergySample.disk_write_mb).label("avg_disk_write"),
         )
         .group_by(EnergySample.app_name, EnergySample.category)
         .all()
@@ -74,6 +77,9 @@ def compute_ratings():
         rating.total_energy_joules = round(r.total_energy or 0, 4)
         rating.avg_cpu_percent = round(r.avg_cpu or 0, 2)
         rating.avg_memory_mb = round(r.avg_memory or 0, 2)
+        rating.avg_gpu_percent = round(r.avg_gpu or 0, 2)
+        rating.avg_disk_read_mb = round(r.avg_disk_read or 0, 4)
+        rating.avg_disk_write_mb = round(r.avg_disk_write or 0, 4)
         rating.rating = grade
         rating.last_updated = datetime.utcnow()
 
