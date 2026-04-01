@@ -103,6 +103,9 @@ class EnergyRating(db.Model):
     avg_power_watts = db.Column(db.Float, default=0.0)
     avg_cpu_percent = db.Column(db.Float, default=0.0)
     avg_memory_mb = db.Column(db.Float, default=0.0)
+    avg_gpu_percent = db.Column(db.Float, default=0.0)
+    avg_disk_read_mb = db.Column(db.Float, default=0.0)
+    avg_disk_write_mb = db.Column(db.Float, default=0.0)
     total_monitoring_seconds = db.Column(db.Float, default=0.0)
     sample_count = db.Column(db.Integer, default=0)
 
@@ -119,6 +122,9 @@ class EnergyRating(db.Model):
             "avg_power_watts": self.avg_power_watts,
             "avg_cpu_percent": self.avg_cpu_percent,
             "avg_memory_mb": self.avg_memory_mb,
+            "avg_gpu_percent": self.avg_gpu_percent,
+            "avg_disk_read_mb": self.avg_disk_read_mb,
+            "avg_disk_write_mb": self.avg_disk_write_mb,
             "total_monitoring_seconds": self.total_monitoring_seconds,
             "sample_count": self.sample_count,
             "rating": self.rating,
