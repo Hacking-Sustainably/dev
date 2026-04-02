@@ -74,3 +74,24 @@ pub async fn wait_for_signal(
         _ = sigint.recv() => {},
     }
 }
+
+pub async fn get_device_name() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        // scutil --get ComputerName
+        if let Ok(output) = tokio::process::Command::new("scutil")
+            .arg("--get")
+            .arg("ComputerName")
+            .output()
+            .await
+        {
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        } else {
+            "unknown".to_string()
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        "unknown".to_string()
+    }
+}

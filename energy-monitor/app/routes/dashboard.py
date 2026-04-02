@@ -224,7 +224,7 @@ def index():
         total_samples=total_samples,
         total_energy=round(total_energy, 2),
         all_apps_count=all_apps_count,
-        total_avg_power_mw=round(total_avg_power * 1000, 2),
+        total_avg_power_w=round(total_avg_power, 2),
         sys_avg_cpu=round(sys_avg_cpu, 2),
         sys_avg_disk_read=round(sys_avg_disk_read, 4),
         sys_avg_disk_write=round(sys_avg_disk_write, 4),

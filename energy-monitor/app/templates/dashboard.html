@@ -31,7 +31,7 @@
     <div class="col-lg-2">
         <div class="tile tile-pad d-flex flex-column justify-content-center" style="height:100%;min-height:340px;">
             <div class="tile-title">Total Energy</div>
-            <div class="tile-number" style="font-size:2.8rem;">{{ "%.3f"|format(total_energy) }}<span class="unit">J</span></div>
+            <div class="tile-number" style="font-size:2.8rem;">{{ "%.1f"|format(total_energy / 1000) }}<span class="unit">kJ</span></div>
             <div style="font-size:0.7rem;color:var(--muted);margin-top:0.5rem;">{{ "{:,}".format(total_samples) }} samples</div>
             <div style="margin-top:auto;padding-top:1rem;">
                 <div style="display:flex;justify-content:space-between;font-size:0.6rem;color:var(--muted);margin-bottom:0.2rem;">
@@ -68,7 +68,7 @@
                     <span></span>
                     <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);">App</span>
                     <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;">Energy</span>
-                    <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;">Avg mW</span>
+                    <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;">Avg W</span>
                     <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;">CPU%</span>
                 </div>
                 {% for a in top_apps %}
@@ -88,9 +88,9 @@
                             <div style="height:100%;width:{{ pct }}%;background:var(--accent);border-radius:1px;"></div>
                         </div>
                     </div>
-                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.3f"|format(a['total_energy'] or 0) }}J</span>
-                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--accent);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.2f"|format((a['avg_power'] or 0) * 1000) }}mW</span>
-                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--text-dim);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.0f"|format(a['avg_cpu'] or 0) }}</span>
+                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.1f"|format((a['total_energy'] or 0) / 1000) }}kJ</span>
+                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--accent);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.3f"|format((a['avg_power'] or 0)) }}W</span>
+                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--text-dim);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.1f"|format(a['avg_cpu'] or 0) }}</span>
                 </div>
                 <!-- real subprocess rows -->
                 {% if has_sub %}
@@ -100,8 +100,8 @@
                        onmouseover="this.style.background='rgba(0,212,255,0.06)'" onmouseout="this.style.background='rgba(0,0,0,0.18)'">
                         <span style="font-size:0.58rem;color:var(--muted);opacity:0.5;padding-left:2px;">&#9492;</span>
                         <span style="font-size:0.64rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ sub['app_name'] }}</span>
-                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.3f"|format(sub['total_energy']) }}J</span>
-                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.2f"|format((sub['avg_power'] or 0) * 1000) }}mW</span>
+                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.2f"|format(sub['total_energy'] / 1000) }}kJ</span>
+                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.3f"|format((sub['avg_power'] or 0)) }}W</span>
                         <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.0f"|format(sub['avg_cpu']) }}</span>
                     </a>
                     {% endfor %}
@@ -162,7 +162,7 @@
     <div class="col-lg-2">
         <div class="tile tile-pad d-flex flex-column" style="height:100%;">
             <div class="tile-title">Avg Power</div>
-            <div class="tile-number accent" style="font-size:2.8rem;">{{ "%.2f"|format(total_avg_power_mw) }}<span class="unit" style="color:var(--accent);opacity:.6;">mW</span></div>
+            <div class="tile-number accent" style="font-size:2.8rem;">{{ "%.2f"|format(total_avg_power_w) }}<span class="unit" style="color:var(--accent);opacity:.6;">W</span></div>
             <div style="font-size:0.68rem;color:var(--muted);margin-top:0.3rem;">system average</div>
         </div>
     </div>
@@ -222,7 +222,7 @@
                         <span class="rating-badge rating-{{ r.rating }}">{{ r.rating }}</span>
                         <img src="/icon/{{ r.app_name }}" class="app-icon" alt="" loading="lazy">
                         <span class="app-name">{{ r.app_name }}</span>
-                        <span class="watt-reading">{{ "%.2f"|format(r.avg_power_watts * 1000) }} mW</span>
+                        <span class="watt-reading">{{ "%.3f"|format(r.avg_power_watts) }} W</span>
                     </a>
                     {% endfor %}
                 </div>
@@ -255,9 +255,9 @@
         {% if total_energy > 0 %}
         {% set kwh = total_energy / 3600000 %}
         <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.9rem; border-left: 3px solid var(--accent); padding-left: 0.7rem;">
-            <strong style="color: var(--text);">{{ "%.4f"|format(total_energy) }} J</strong> total &nbsp;/&nbsp;
+            <strong style="color: var(--text);">{{ "%.2f"|format(total_energy / 1000) }} kJ</strong> total &nbsp;/&nbsp;
             {{ "%.8f"|format(kwh) }} kWh &mdash;
-            J = <em>how much energy</em>; W = the <em>rate</em>.
+            kJ = <em>how much energy</em>; W = the <em>rate</em>.
         </p>
 
         <div class="section-label">Home</div>
@@ -315,7 +315,7 @@
             {% endfor %}
         </div>
 
-        <div class="section-label">CO\u2082 &amp; Nature</div>
+        <div class="section-label">CO2 &amp; Nature</div>
         <div class="row g-2 mb-3">
             {% for val, lbl in [
                 ("%.3f"|format(kwh * 400)         ~ ' g', 'CO\u2082e (400 g/kWh grid avg)'),
@@ -519,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }], {
             ...baseLayout,
             xaxis: { ...baseLayout.xaxis, title: { text: 'Application', font: { size: 10, family: FONT } }, tickangle: -30 },
-            yaxis: { ...baseLayout.yaxis, title: { text: 'Total Energy (J)', font: { size: 10, family: FONT } } },
+            yaxis: { ...baseLayout.yaxis, title: { text: 'Total Energy (kJ)', font: { size: 10, family: FONT } } },
             bargap: 0.25,
         }, { responsive: true, displayModeBar: false });
 
@@ -535,7 +535,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }], {
             ...baseLayout,
             xaxis: { ...baseLayout.xaxis, title: { text: 'Avg CPU %', font: { size: 10, family: FONT } } },
-            yaxis: { ...baseLayout.yaxis, title: { text: 'Avg Power (mW)', font: { size: 10, family: FONT } } },
+            yaxis: { ...baseLayout.yaxis, title: { text: 'Avg Power (W)', font: { size: 10, family: FONT } } },
         }, { responsive: true, displayModeBar: false });
 
         /* Pie */
@@ -567,26 +567,26 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.length === 0) return;
 
             const ts   = data.map(d => d.timestamp);
-            const cumJ = data.map(d => d.cumulative_joules);
-            const perJ = data.map(d => d.energy_joules);
+            const cumJ = data.map(d => d.cumulative_joules / 1000);
+            const perJ = data.map(d => d.energy_joules / 1000);
 
             Plotly.newPlot('chart-energy-over-time', [
                 {
                     x: ts, y: cumJ,
                     type: 'scatter', mode: 'lines',
-                    name: 'Cumulative (J)',
+                    name: 'Cumulative (kJ)',
                     line: { color: ACCENT, width: 2, shape: 'linear' },
                     fill: 'tozeroy',
                     fillcolor: 'rgba(0,212,255,0.08)',
-                    hovertemplate: '%{x|%b %d %H:%M}<br>Cumulative: %{y:.1f} J<extra></extra>',
+                    hovertemplate: '%{x|%b %d %H:%M}<br>Cumulative: %{y:.1f} kJ<extra></extra>',
                 },
                 {
                     x: ts, y: perJ,
                     type: 'bar',
-                    name: 'Per interval (J)',
+                    name: 'Per interval (kJ)',
                     marker: { color: ACCENT2, opacity: 0.45, line: { width: 0 }, cornerradius: 0 },
                     yaxis: 'y2',
-                    hovertemplate: '%{x|%b %d %H:%M}<br>Interval: %{y:.1f} J<extra></extra>',
+                    hovertemplate: '%{x|%b %d %H:%M}<br>Interval: %{y:.1f} kJ<extra></extra>',
                 },
             ], {
                 ...baseLayout,
@@ -600,12 +600,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 yaxis: {
                     ...baseLayout.yaxis,
-                    title: { text: 'Cumulative Energy (J)', font: { size: 10, family: FONT } },
+                    title: { text: 'Cumulative Energy (kJ)', font: { size: 10, family: FONT } },
                     side: 'left',
                     rangemode: 'tozero',
                 },
                 yaxis2: {
-                    title: { text: 'Per Interval (J)', font: { size: 10, family: FONT, color: ACCENT2 } },
+                    title: { text: 'Per Interval (kJ)', font: { size: 10, family: FONT, color: ACCENT2 } },
                     overlaying: 'y', side: 'right',
                     gridcolor: 'rgba(0,0,0,0)',
                     tickfont: { color: ACCENT2, size: 10, family: FONT },

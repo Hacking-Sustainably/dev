@@ -32,6 +32,9 @@ fn process_app_map() -> &'static HashMap<&'static str, &'static str> {
     PROCESS_APP_MAP.get_or_init(|| {
         let mut m = HashMap::new();
 
+        // ── GreenB -----------------------------------------------------------
+        m.insert("greend", "GreenB");
+
         // ── Discord ──────────────────────────────────────────────────────────
         m.insert("Discord Helper", "Discord");
         m.insert("Discord Helper (Renderer)", "Discord");
@@ -155,6 +158,7 @@ fn process_app_map() -> &'static HashMap<&'static str, &'static str> {
         m.insert("Signal Helper (Renderer)", "Signal");
         m.insert("Signal Helper (GPU)", "Signal");
         m.insert("Signal Helper (Plugin)", "Signal");
+        m.insert("signal-desktop", "Signal");
 
         // ── Telegram ─────────────────────────────────────────────────────────
         m.insert("Telegram Helper", "Telegram");
@@ -246,6 +250,7 @@ fn process_app_map() -> &'static HashMap<&'static str, &'static str> {
         m.insert("iTerm2", "iTerm2");
         m.insert("com.googlecode.iterm2", "iTerm2");
         m.insert("wezterm-gui", "WezTerm");
+        m.insert("alacritty", "Alacritty");
 
         // ── Alfred / Raycast / Spotlight ─────────────────────────────────────
         m.insert("com.runningwithcrayons.Alfred", "Alfred");
@@ -293,7 +298,10 @@ fn process_app_map() -> &'static HashMap<&'static str, &'static str> {
         m.insert("SimulatorBridge", "Simulator");
         m.insert("mediaanalysisd", "Media Analysis");
         m.insert("mediaremoted", "Media Remote");
-
+        m.insert("CalendarWidgetExtension", "Calendar Widget");
+        m.insert("calaccessd", "Calendar");
+        
+        
         m
     })
 }
@@ -621,7 +629,9 @@ fn convert_samples(
             let app_name = map
                 .get(proc.name.as_str())
                 .copied()
-                .unwrap_or_else(|| app_name.unwrap_or(proc.name.as_str()))
+                .unwrap_or_else(|| {
+                    app_name.map_or(proc.name.as_str(), |n| map.get(n).unwrap_or(&n))
+                })
                 .to_string();
 
             buf.push(EnergySample {
