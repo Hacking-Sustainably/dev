@@ -150,7 +150,7 @@ function updateComparison() {
     function makeBar(container, values, title) {
         Plotly.newPlot(container, [{
             x: names, y: values, type: 'bar',
-            marker: { color: barColors, line: { width: 0 } },
+            marker: { color: barColors, line: { width: 0 }, cornerradius: 0 },
         }], {
             ...baseLayout,
             xaxis: { ...baseLayout.xaxis, tickangle: -30 },
