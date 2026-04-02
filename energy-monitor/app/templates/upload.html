@@ -209,7 +209,7 @@ function generateSample() {
     resultDiv.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;">Generating\u2026</div>';
 
     // Each profile has a parent app with optional helper/subprocess entries.
-    // Power values are in watts (realistic mW-scale from powermetrics).
+    // Power values are in watts (realistic W-scale from powermetrics).
     const appProfiles = [
         { name: 'Google Chrome', cat: 'browser', basePower: 0.025, baseCpu: 12, baseGpu: 2.0, helpers: [
             { name: 'Google Chrome Helper (Renderer)', pFrac: 0.5, cFrac: 0.4 },

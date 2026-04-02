@@ -39,13 +39,13 @@
     <div class="col-6 col-md-2">
         <div class="tile tile-pad" style="background:var(--accent-dim);">
             <div class="tile-label" style="color:var(--accent);opacity:.8;">Avg Power</div>
-            <div class="tile-number accent" style="font-size:1.8rem;">{{ "%.2f"|format(rating.avg_power_watts * 1000) }}<span class="unit" style="color:var(--accent);opacity:.6;">mW</span></div>
+            <div class="tile-number accent" style="font-size:1.8rem;">{{ "%.3f"|format(rating.avg_power_watts) }}<span class="unit" style="color:var(--accent);opacity:.6;">W</span></div>
         </div>
     </div>
     <div class="col-6 col-md-2">
         <div class="tile tile-pad">
             <div class="tile-label">Total Energy</div>
-            <div class="tile-number" style="font-size:1.8rem;">{{ "%.4f"|format(rating.total_energy_joules) }}<span class="unit">J</span></div>
+            <div class="tile-number" style="font-size:1.8rem;">{{ "%.1f"|format(rating.total_energy_joules / 1000) }}<span class="unit">kJ</span></div>
         </div>
     </div>
     <div class="col-6 col-md-2">
@@ -106,8 +106,8 @@
                     Rating computed by comparing average power draw against all tracked applications using percentile-based thresholds.
                 </p>
                 <ul style="color:var(--muted);margin-bottom:0.4rem;font-family:var(--mono);font-size:0.75rem;">
-                    <li>avg_power: <strong style="color:var(--accent);">{{ "%.2f"|format(rating.avg_power_watts * 1000) }} mW</strong></li>
-                    <li>total_energy: <strong style="color:var(--accent);">{{ "%.6f"|format(rating.total_energy_joules) }} J</strong></li>
+                    <li>avg_power: <strong style="color:var(--accent);">{{ "%.3f"|format(rating.avg_power_watts) }} W</strong></li>
+                    <li>total_energy: <strong style="color:var(--accent);">{{ "%.2f"|format(rating.total_energy_joules / 1000) }} kJ</strong></li>
                     <li>avg_cpu: <strong style="color:var(--accent);">{{ "%.2f"|format(rating.avg_cpu_percent) }}%</strong></li>
                     <li>avg_gpu: <strong style="color:var(--accent);">{{ "%.2f"|format(rating.avg_gpu_percent or 0) }}%</strong></li>
                     <li>avg_memory: <strong style="color:var(--accent);">{{ "%.2f"|format(rating.avg_memory_mb) }} MB</strong></li>
@@ -129,7 +129,7 @@
     <div class="tile-header">Real-World Context</div>
     <div class="tile-pad">
         <p style="font-size:0.8rem;color:var(--text-dim);margin-bottom:0.9rem;border-left:3px solid var(--accent);padding-left:0.7rem;">
-            <strong style="color:var(--text);">{{ "%.2f"|format(w * 1000) }} mW</strong> average &mdash;
+            <strong style="color:var(--text);">{{ "%.3f"|format(w) }} W</strong> average &mdash;
             1 hour = <strong style="color:var(--text);">{{ "%.8f"|format(kwh_hr) }} kWh</strong>.
             Year: <strong style="color:var(--text);">8 h/day &times; 365 days</strong>.
         </p>
@@ -189,7 +189,7 @@
             {% endfor %}
         </div>
 
-        <div class="section-label">CO\u2082 &amp; Nature &mdash; per year</div>
+        <div class="section-label">CO2 &amp; Nature &mdash; per year</div>
         <div class="row g-2 mb-3">
             {% for val, lbl in [
                 ("%.0f"|format(kwh_yr * 400) ~ ' g',         'CO\u2082e / year (400 g/kWh)'),
@@ -324,7 +324,7 @@
         <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
             <table class="table table-hover mb-0" style="font-size:0.72rem;">
                 <thead><tr>
-                    <th>Timestamp</th><th>PID</th><th>Power (mW)</th><th>Energy (J)</th>
+                    <th>Timestamp</th><th>PID</th><th>Power (W)</th><th>Energy (kJ)</th>
                     <th>CPU %</th><th>GPU %</th><th>Disk R (MB)</th><th>Disk W (MB)</th>
                 </tr></thead>
                 <tbody>
@@ -333,7 +333,7 @@
                     <td style="font-family:var(--mono);">{{ s.timestamp.strftime('%H:%M:%S') }}</td>
                     <td>{{ s.pid or '—' }}</td>
                     <td>{{ "%.3f"|format((s.power_watts or 0) * 1000) }}</td>
-                    <td>{{ "%.6f"|format(s.energy_joules or 0) }}</td>
+                    <td>{{ "%.2f"|format((s.energy_joules or 0) / 1000) }}</td>
                     <td>{{ "%.1f"|format(s.cpu_percent or 0) }}</td>
                     <td>{% if s.gpu_percent is not none %}{{ "%.1f"|format(s.gpu_percent) }}{% else %}—{% endif %}</td>
                     <td>{% if s.disk_read_mb is not none %}{{ "%.4f"|format(s.disk_read_mb) }}{% else %}—{% endif %}</td>

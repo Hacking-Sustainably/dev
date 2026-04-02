@@ -37,8 +37,8 @@
             <table class="table table-hover mb-0">
                 <thead><tr>
                     <th>Application</th>
-                    <th>Avg Power (mW)</th>
-                    <th>Total Energy (J)</th>
+                    <th>Avg Power (W)</th>
+                    <th>Total Energy (kJ)</th>
                     <th>Avg CPU %</th>
                     <th>Avg GPU %</th>
                     <th>Avg Memory (MB)</th>
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }], {
             ...baseLayout,
             xaxis: { ...baseLayout.xaxis, tickangle: -30 },
-            yaxis: { ...baseLayout.yaxis, title: { text: 'Energy (J)', font: { size: 10, family: FONT } } },
+            yaxis: { ...baseLayout.yaxis, title: { text: 'Energy (kJ)', font: { size: 10, family: FONT } } },
             bargap: 0.25,
         }, { responsive: true, displayModeBar: false });
     }

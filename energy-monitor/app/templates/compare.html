@@ -51,7 +51,7 @@
     </div>
     <div class="col-lg-6">
         <div class="tile">
-            <div class="tile-header">Total Energy (J)</div>
+            <div class="tile-header">Total Energy (kJ)</div>
             <div style="padding:0.4rem 0.8rem 0.6rem;"><div id="chart-energy" class="chart-container"></div></div>
         </div>
     </div>
@@ -191,15 +191,15 @@ function updateComparison() {
         }, { responsive: true, displayModeBar: false });
     }
 
-    makeBar('chart-power',      data.map(function(d) { return d.avg_power_watts * 1000; }),    'mW');
+    makeBar('chart-power',      data.map(function(d) { return d.avg_power_watts; }),    'W');
     makeBar('chart-cpu',        data.map(function(d) { return d.avg_cpu_percent; }),    'CPU %');
     makeBar('chart-memory',     data.map(function(d) { return d.avg_memory_mb; }),      'MB');
-    makeBar('chart-energy',     data.map(function(d) { return d.total_energy_joules; }),'Joules');
+    makeBar('chart-energy',     data.map(function(d) { return d.total_energy_joules / 1000; }),'Kilojoules');
     makeBar('chart-disk-read',  data.map(function(d) { return d.avg_disk_read_mb || 0; }), 'MB');
     makeBar('chart-disk-write', data.map(function(d) { return d.avg_disk_write_mb || 0; }), 'MB');
 
-    var metrics = ['avg_power_mw','avg_cpu_percent','avg_memory_mb','total_energy_joules','avg_disk_read_mb','avg_disk_write_mb'];
-    var labels  = ['Power (mW)','CPU %','Memory (MB)','Energy (J)','Disk Read (MB)','Disk Write (MB)'];
+    var metrics = ['avg_power_watts','avg_cpu_percent','avg_memory_mb','total_energy_joules','avg_disk_read_mb','avg_disk_write_mb'];
+    var labels  = ['Power (W)','CPU %','Memory (MB)','Energy (kJ)','Disk Read (MB)','Disk Write (MB)'];
     // Add derived mW field for radar
     data.forEach(function(d) { d.avg_power_mw = d.avg_power_watts * 1000; });
     var maxVals = metrics.map(function(m) {
