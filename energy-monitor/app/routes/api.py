@@ -11,10 +11,6 @@ from app.services import compute_ratings
 api_bp = Blueprint("api", __name__)
 
 
-# ---------------------------------------------------------------------------
-#  Sessions
-# ---------------------------------------------------------------------------
-
 @api_bp.route("/sessions", methods=["GET"])
 def list_sessions():
     sessions = MonitoringSession.query.order_by(
@@ -38,23 +34,25 @@ def delete_session(session_id):
     return jsonify({"message": "Session deleted"}), 200
 
 
-# ---------------------------------------------------------------------------
-#  Upload / Ingest
-# ---------------------------------------------------------------------------
+@api_bp.route("/apps/<path:app_name>", methods=["DELETE"])
+def delete_app(app_name):
+    """Delete all samples and the energy rating for a given application."""
+    deleted_samples = EnergySample.query.filter_by(app_name=app_name).delete()
+    rating = EnergyRating.query.filter_by(app_name=app_name).first()
+    if rating:
+        db.session.delete(rating)
+    db.session.commit()
+    compute_ratings()
+    return jsonify({
+        "message": f"Deleted {deleted_samples} samples and rating for '{app_name}'",
+        "app_name": app_name,
+        "samples_deleted": deleted_samples,
+    }), 200
+
 
 @api_bp.route("/upload/json", methods=["POST"])
 def upload_json():
-    """
-    Accept a JSON payload with monitoring data.
-    Expected format:
-    {
-      "session": { "name": "...", "device_name": "...", ... },
-      "samples": [
-        { "timestamp": "ISO8601", "app_name": "...", "power_watts": ..., ... },
-        ...
-      ]
-    }
-    """
+    """Accept a JSON payload with monitoring data."""
     data = request.get_json(force=True)
     if not data:
         return jsonify({"error": "No JSON payload provided"}), 400
@@ -77,14 +75,7 @@ def upload_json():
 
 @api_bp.route("/upload/csv", methods=["POST"])
 def upload_csv():
-    """
-    Accept a CSV file upload with energy samples.
-    Required columns: timestamp, app_name
-    Optional columns: power_watts, energy_joules, cpu_percent, memory_mb,
-                      gpu_percent, disk_read_mb, disk_write_mb,
-                      network_sent_mb, network_recv_mb, pid, category,
-                      is_background
-    """
+    """Accept a CSV file upload with energy samples."""
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
@@ -127,10 +118,6 @@ def upload_csv():
     }), 201
 
 
-# ---------------------------------------------------------------------------
-#  Samples query
-# ---------------------------------------------------------------------------
-
 @api_bp.route("/samples", methods=["GET"])
 def query_samples():
     """Query samples with optional filters: session_id, app_name, start, end."""
@@ -155,10 +142,6 @@ def query_samples():
     return jsonify([s.to_dict() for s in samples])
 
 
-# ---------------------------------------------------------------------------
-#  Ratings
-# ---------------------------------------------------------------------------
-
 @api_bp.route("/ratings", methods=["GET"])
 def get_ratings():
     ratings = EnergyRating.query.order_by(EnergyRating.rating.asc()).all()
@@ -170,10 +153,6 @@ def recompute_ratings():
     compute_ratings()
     return jsonify({"message": "Ratings recomputed"})
 
-
-# ---------------------------------------------------------------------------
-#  Summary / analytics helpers
-# ---------------------------------------------------------------------------
 
 @api_bp.route("/summary/apps", methods=["GET"])
 def app_summary():
@@ -220,11 +199,7 @@ def app_summary():
 
 @api_bp.route("/summary/timeline", methods=["GET"])
 def timeline_summary():
-    """
-    Return power/cpu/memory over time, resampled into at most MAX_POINTS
-    evenly-spaced time buckets so charts always look smooth regardless of
-    how densely the data was collected.
-    """
+    """Return power/cpu/memory over time, resampled into evenly-spaced buckets."""
     MAX_POINTS = 120
 
     session_id = request.args.get("session_id", type=int)
@@ -241,12 +216,10 @@ def timeline_summary():
     if not samples:
         return jsonify([])
 
-    # Group by app, resample into equal-width buckets
     t_min = samples[0].timestamp
     t_max = samples[-1].timestamp
     span = (t_max - t_min).total_seconds()
 
-    # If span is tiny or data is already sparse, return as-is
     if span <= 0 or len(samples) <= MAX_POINTS:
         return jsonify([
             {
@@ -283,7 +256,6 @@ def timeline_summary():
         if s.disk_write_mb is not None:
             buckets[key]["disk_w"].append(s.disk_write_mb)
 
-    # Collect all app names present
     app_names = sorted({k[0] for k in buckets})
 
     timeline = []
@@ -305,17 +277,13 @@ def timeline_summary():
                 "disk_write_mb": round(sum(b["disk_w"]) / len(b["disk_w"]), 4) if b["disk_w"] else None,
             })
 
-    # Sort by timestamp then app so charts render correctly
     timeline.sort(key=lambda x: (x["timestamp"], x["app_name"]))
     return jsonify(timeline)
 
 
 @api_bp.route("/summary/energy-over-time", methods=["GET"])
 def energy_over_time():
-    """
-    Return cumulative energy (J) over time, bucketed into up to MAX_POINTS
-    time intervals.  Returns [{timestamp, energy_joules, cumulative_joules}].
-    """
+    """Return cumulative energy (J) over time, bucketed into time intervals."""
     MAX_POINTS = 100
 
     query = (
@@ -373,10 +341,6 @@ def energy_over_time():
 
     return jsonify(result)
 
-
-# ---------------------------------------------------------------------------
-#  Helpers
-# ---------------------------------------------------------------------------
 
 def _create_session(session_info, samples_data):
     timestamps = []
