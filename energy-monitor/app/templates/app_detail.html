@@ -388,12 +388,12 @@ fetch('/api/summary/timeline?app_name={{ app_name }}')
         Plotly.newPlot('chart-timeline', [
             {
                 x: ts, y: power, name: 'Power (W)', type: 'scatter', mode: 'lines',
-                line: { color: ACCENT, shape: 'spline', smoothing: 1.3, width: 2 },
+                line: { color: ACCENT, shape: 'linear', width: 2 },
                 fill: 'tozeroy', fillcolor: 'rgba(0,212,255,0.08)',
             },
             {
                 x: ts, y: cpu, name: 'CPU %', type: 'scatter', mode: 'lines', yaxis: 'y2',
-                line: { color: ACCENT2, shape: 'spline', smoothing: 1.3, width: 1.5, dash: 'dot' },
+                line: { color: ACCENT2, shape: 'linear', width: 1.5, dash: 'dot' },
             },
         ], {
             ...baseLayout,
@@ -408,7 +408,7 @@ fetch('/api/summary/timeline?app_name={{ app_name }}')
             Plotly.newPlot('chart-memory', [{
                 x: ts, y: mem, type: 'scatter', mode: 'lines',
                 fill: 'tozeroy', fillcolor: 'rgba(0,212,255,0.06)',
-                line: { color: ACCENT, shape: 'spline', smoothing: 1.3, width: 2 },
+                line: { color: ACCENT, shape: 'linear', width: 2 },
             }], {
                 ...baseLayout,
                 yaxis: { ...baseLayout.yaxis, title: { text: 'Memory (MB)', font: { size: 10, family: FONT } } },
@@ -424,12 +424,12 @@ fetch('/api/summary/timeline?app_name={{ app_name }}')
             Plotly.newPlot('chart-disk-io', [
                 {
                     x: ts, y: diskR, name: 'Read (MB)', type: 'scatter', mode: 'lines',
-                    line: { color: ACCENT3, shape: 'spline', smoothing: 1.3, width: 2 },
+                    line: { color: ACCENT3, shape: 'linear', width: 2 },
                     fill: 'tozeroy', fillcolor: 'rgba(34,197,94,0.08)',
                 },
                 {
                     x: ts, y: diskW, name: 'Write (MB)', type: 'scatter', mode: 'lines',
-                    line: { color: ACCENT4, shape: 'spline', smoothing: 1.3, width: 2 },
+                    line: { color: ACCENT4, shape: 'linear', width: 2 },
                     fill: 'tozeroy', fillcolor: 'rgba(248,113,113,0.08)',
                 },
             ], {
@@ -447,7 +447,7 @@ fetch('/api/summary/timeline?app_name={{ app_name }}')
             Plotly.newPlot('chart-gpu', [{
                 x: ts, y: gpu, type: 'scatter', mode: 'lines',
                 fill: 'tozeroy', fillcolor: 'rgba(240,192,80,0.08)',
-                line: { color: ACCENT2, shape: 'spline', smoothing: 1.3, width: 2 },
+                line: { color: ACCENT2, shape: 'linear', width: 2 },
             }], {
                 ...baseLayout,
                 yaxis: { ...baseLayout.yaxis, title: { text: 'GPU %', font: { size: 10, family: FONT } } },

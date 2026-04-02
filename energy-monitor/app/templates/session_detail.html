@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const traces = Object.entries(byApp).map(([name, vals], i) => ({
                 x: vals.x, y: vals.y, name, type: 'scatter', mode: 'lines',
-                line: { shape: 'spline', smoothing: 1.3, color: palette[i % palette.length], width: 1.5 },
+                line: { shape: 'linear', color: palette[i % palette.length], width: 1.5 },
                 stackgroup: 'one',
                 fillcolor: palette[i % palette.length] + '33',
             }));
@@ -171,6 +171,7 @@ document.addEventListener('DOMContentLoaded', function() {
             marker: {
                 color: apps.map((_, i) => i % 2 === 0 ? ACCENT : ACCENT2),
                 line: { width: 0 },
+                cornerradius: 0,
             },
         }], {
             ...baseLayout,
