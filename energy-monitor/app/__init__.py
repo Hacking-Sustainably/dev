@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from config import config_map, get_database_path
 import os
+from sqlalchemy import inspect, text
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -31,5 +32,24 @@ def create_app(config_name=None):
     with app.app_context():
         from app import models  # noqa: F401
         db.create_all()
+        _migrate_missing_columns(db)
 
     return app
+
+
+def _migrate_missing_columns(database):
+    inspector = inspect(database.engine)
+    for table in database.metadata.sorted_tables:
+        if not inspector.has_table(table.name):
+            continue
+        existing = {c["name"] for c in inspector.get_columns(table.name)}
+        for col in table.columns:
+            if col.name not in existing:
+                col_type = col.type.compile(database.engine.dialect)
+                default = ""
+                if col.default is not None:
+                    default = f" DEFAULT {col.default.arg!r}"
+                database.session.execute(
+                    text(f"ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type}{default}")
+                )
+    database.session.commit()
