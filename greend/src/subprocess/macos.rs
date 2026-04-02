@@ -1,6 +1,8 @@
 //! retrieve system energy usage samples from `powermetrics` and
 //! convert to [`EnergySample`] structs for the database.
+use std::collections::HashMap;
 use std::process::Stdio;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use chrono::DateTime;
@@ -24,6 +26,277 @@ use tracing::warn;
 
 use crate::schema::EnergySample;
 use crate::schema::Timestamp;
+static PROCESS_APP_MAP: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+
+fn process_app_map() -> &'static HashMap<&'static str, &'static str> {
+    PROCESS_APP_MAP.get_or_init(|| {
+        let mut m = HashMap::new();
+
+        // ── Discord ──────────────────────────────────────────────────────────
+        m.insert("Discord Helper", "Discord");
+        m.insert("Discord Helper (Renderer)", "Discord");
+        m.insert("Discord Helper (GPU)", "Discord");
+        m.insert("Discord Helper (Plugin)", "Discord");
+
+        // ── Slack ────────────────────────────────────────────────────────────
+        m.insert("Slack Helper", "Slack");
+        m.insert("Slack Helper (Renderer)", "Slack");
+        m.insert("Slack Helper (GPU)", "Slack");
+        m.insert("Slack Helper (Plugin)", "Slack");
+
+        // ── Microsoft Teams ──────────────────────────────────────────────────
+        m.insert("Teams Helper", "Microsoft Teams");
+        m.insert("Teams Helper (Renderer)", "Microsoft Teams");
+        m.insert("Teams Helper (GPU)", "Microsoft Teams");
+        m.insert("Microsoft Teams Helper", "Microsoft Teams");
+        m.insert("Microsoft Teams Helper (Renderer)", "Microsoft Teams");
+        m.insert("Microsoft Teams Helper (GPU)", "Microsoft Teams");
+
+        // ── Zoom ─────────────────────────────────────────────────────────────
+        m.insert("zoom.us", "Zoom");
+        m.insert("ZoomAudioDevice", "Zoom");
+        m.insert("ZoomOpener", "Zoom");
+
+        // ── Google Chrome ────────────────────────────────────────────────────
+        m.insert("Google Chrome Helper", "Google Chrome");
+        m.insert("Google Chrome Helper (Renderer)", "Google Chrome");
+        m.insert("Google Chrome Helper (GPU)", "Google Chrome");
+        m.insert("Google Chrome Helper (Plugin)", "Google Chrome");
+        m.insert("Google Chrome Helper (Alerts)", "Google Chrome");
+
+        // ── Chromium ─────────────────────────────────────────────────────────
+        m.insert("Chromium Helper", "Chromium");
+        m.insert("Chromium Helper (Renderer)", "Chromium");
+        m.insert("Chromium Helper (GPU)", "Chromium");
+
+        // ── Mozilla Firefox ──────────────────────────────────────────────────
+        m.insert("firefox", "Firefox");
+        m.insert("plugin-container", "Firefox");
+        m.insert("RDD Process", "Firefox");
+        m.insert("Web Content", "Firefox");
+
+        // ── Safari ───────────────────────────────────────────────────────────
+        m.insert("com.apple.WebKit.WebContent", "Safari");
+        m.insert("com.apple.WebKit.Networking", "Safari");
+        m.insert("com.apple.WebKit.GPU", "Safari");
+        m.insert("SafariServices", "Safari");
+
+        // ── Arc Browser ──────────────────────────────────────────────────────
+        m.insert("Arc Helper", "Arc");
+        m.insert("Arc Helper (Renderer)", "Arc");
+        m.insert("Arc Helper (GPU)", "Arc");
+        m.insert("Arc Helper (Plugin)", "Arc");
+
+        // ── Brave Browser ────────────────────────────────────────────────────
+        m.insert("Brave Browser Helper", "Brave Browser");
+        m.insert("Brave Browser Helper (Renderer)", "Brave Browser");
+        m.insert("Brave Browser Helper (GPU)", "Brave Browser");
+
+        // ── Microsoft Edge ───────────────────────────────────────────────────
+        m.insert("Microsoft Edge Helper", "Microsoft Edge");
+        m.insert("Microsoft Edge Helper (Renderer)", "Microsoft Edge");
+        m.insert("Microsoft Edge Helper (GPU)", "Microsoft Edge");
+
+        // ── Opera ────────────────────────────────────────────────────────────
+        m.insert("Opera Helper", "Opera");
+        m.insert("Opera Helper (Renderer)", "Opera");
+        m.insert("Opera Helper (GPU)", "Opera");
+
+        // ── Visual Studio Code ───────────────────────────────────────────────
+        m.insert("Code Helper", "Code");
+        m.insert("Code Helper (Renderer)", "Code");
+        m.insert("Code Helper (GPU)", "Code");
+        m.insert("Code Helper (Plugin)", "Code");
+
+        // ── Cursor ───────────────────────────────────────────────────────────
+        m.insert("Cursor Helper", "Cursor");
+        m.insert("Cursor Helper (Renderer)", "Cursor");
+        m.insert("Cursor Helper (GPU)", "Cursor");
+        m.insert("Cursor Helper (Plugin)", "Cursor");
+
+        // ── Windsurf ─────────────────────────────────────────────────────────
+        m.insert("Windsurf Helper", "Windsurf");
+        m.insert("Windsurf Helper (Renderer)", "Windsurf");
+        m.insert("Windsurf Helper (GPU)", "Windsurf");
+
+        // ── Xcode ────────────────────────────────────────────────────────────
+        m.insert("com.apple.dt.Xcode", "Xcode");
+        m.insert("XCBBuildService", "Xcode");
+        m.insert("IBAgent-x86_64", "Xcode");
+        m.insert("sourcekit-lsp", "Xcode");
+        m.insert("clangd", "Xcode");
+
+        // ── JetBrains IDEs ───────────────────────────────────────────────────
+        m.insert("idea", "IntelliJ IDEA");
+        m.insert("idea_c", "IntelliJ IDEA");
+        m.insert("pycharm", "PyCharm");
+        m.insert("pycharm_c", "PyCharm");
+        m.insert("webstorm", "WebStorm");
+        m.insert("webstorm_c", "WebStorm");
+        m.insert("goland", "GoLand");
+        m.insert("goland_c", "GoLand");
+        m.insert("clion", "CLion");
+        m.insert("clion_c", "CLion");
+        m.insert("datagrip", "DataGrip");
+        m.insert("datagrip_c", "DataGrip");
+        m.insert("rider", "Rider");
+        m.insert("rider_c", "Rider");
+        m.insert("rubymine", "RubyMine");
+
+        // ── Spotify ──────────────────────────────────────────────────────────
+        m.insert("Spotify Helper", "Spotify");
+        m.insert("Spotify Helper (Renderer)", "Spotify");
+        m.insert("Spotify Helper (GPU)", "Spotify");
+        m.insert("SpotifyNotificationService", "Spotify");
+        m.insert("SpotifyWebHelper", "Spotify");
+
+        // ── Signal ───────────────────────────────────────────────────────────
+        m.insert("Signal Helper", "Signal");
+        m.insert("Signal Helper (Renderer)", "Signal");
+        m.insert("Signal Helper (GPU)", "Signal");
+        m.insert("Signal Helper (Plugin)", "Signal");
+
+        // ── Telegram ─────────────────────────────────────────────────────────
+        m.insert("Telegram Helper", "Telegram");
+        m.insert("Telegram Helper (Renderer)", "Telegram");
+        m.insert("Telegram Helper (GPU)", "Telegram");
+
+        // ── WhatsApp ─────────────────────────────────────────────────────────
+        m.insert("WhatsApp Helper", "WhatsApp");
+        m.insert("WhatsApp Helper (Renderer)", "WhatsApp");
+        m.insert("WhatsApp Helper (GPU)", "WhatsApp");
+
+        // ── Steam ────────────────────────────────────────────────────────────
+        m.insert("steam_osx", "Steam");
+        m.insert("Steam Helper", "Steam");
+        m.insert("Steam Helper (Renderer)", "Steam");
+        m.insert("Steam Helper (GPU)", "Steam");
+        m.insert("steamwebhelper", "Steam");
+        m.insert("SteamService", "Steam");
+
+        // ── Epic Games ───────────────────────────────────────────────────────
+        m.insert("EpicGamesLauncher", "Epic Games Launcher");
+        m.insert("EpicWebHelper", "Epic Games Launcher");
+
+        // ── Battle.net ───────────────────────────────────────────────────────
+        m.insert("Battle.net Helper", "Battle.net");
+        m.insert("Agent.exe", "Battle.net");
+
+        // ── 1Password ────────────────────────────────────────────────────────
+        m.insert("1Password 7 - Password Manager", "1Password");
+        m.insert("1Password Extension Helper", "1Password");
+        m.insert("1Password Safari", "1Password");
+        m.insert("op", "1Password");
+
+        // ── Bitwarden ────────────────────────────────────────────────────────
+        m.insert("Bitwarden Helper", "Bitwarden");
+        m.insert("Bitwarden Helper (Renderer)", "Bitwarden");
+
+        // ── Dropbox ──────────────────────────────────────────────────────────
+        m.insert("DropboxHelper", "Dropbox");
+        m.insert("dbcrash", "Dropbox");
+        m.insert("dbfseventsd", "Dropbox");
+        m.insert("dbxosd", "Dropbox");
+
+        // ── OneDrive ─────────────────────────────────────────────────────────
+        m.insert("OneDriveStandaloneUpdater", "OneDrive");
+        m.insert("OneDriveHelper", "OneDrive");
+
+        // ── Google Drive ─────────────────────────────────────────────────────
+        m.insert("Google Drive File Stream", "Google Drive");
+        m.insert("googledrivesync", "Google Drive");
+        m.insert("GoogleDriveFSHelper", "Google Drive");
+
+        // ── iCloud / Apple services ──────────────────────────────────────────
+        m.insert("bird", "iCloud");
+        m.insert("cloudd", "iCloud");
+        m.insert("cloudpaird", "iCloud");
+        m.insert("com.apple.iCloudHelper", "iCloud");
+        m.insert("Photos Library Helper", "Photos");
+
+        // ── Microsoft Office ─────────────────────────────────────────────────
+        m.insert("Microsoft Word", "Word");
+        m.insert("Microsoft Excel", "Excel");
+        m.insert("Microsoft PowerPoint", "PowerPoint");
+        m.insert("Microsoft Outlook", "Outlook");
+        m.insert("Microsoft OneNote", "OneNote");
+        m.insert("MicrosoftAutoupdate", "Microsoft AutoUpdate");
+
+        // ── Notion ───────────────────────────────────────────────────────────
+        m.insert("Notion Helper", "Notion");
+        m.insert("Notion Helper (Renderer)", "Notion");
+        m.insert("Notion Helper (GPU)", "Notion");
+
+        // ── Figma ────────────────────────────────────────────────────────────
+        m.insert("Figma Helper", "Figma");
+        m.insert("Figma Helper (Renderer)", "Figma");
+        m.insert("Figma Helper (GPU)", "Figma");
+
+        // ── Docker ───────────────────────────────────────────────────────────
+        m.insert("com.docker.backend", "Docker");
+        m.insert("com.docker.vmnetd", "Docker");
+        m.insert("com.docker.hyperkit", "Docker");
+        m.insert("Docker Desktop Helper", "Docker");
+        m.insert("Docker Desktop Helper (Renderer)", "Docker");
+        m.insert("docker", "Docker");
+        m.insert("dockerd", "Docker");
+        m.insert("vpnkit", "Docker");
+
+        // ── Terminal emulators ───────────────────────────────────────────────
+        m.insert("iTerm2", "iTerm2");
+        m.insert("com.googlecode.iterm2", "iTerm2");
+        m.insert("wezterm-gui", "WezTerm");
+
+        // ── Alfred / Raycast / Spotlight ─────────────────────────────────────
+        m.insert("com.runningwithcrayons.Alfred", "Alfred");
+        m.insert("Alfred Helper", "Alfred");
+
+        // ── OBS Studio ───────────────────────────────────────────────────────
+        m.insert("obs", "OBS Studio");
+        m.insert("OBS Helper", "OBS Studio");
+        m.insert("OBS Helper (Renderer)", "OBS Studio");
+        m.insert("OBS Helper (GPU)", "OBS Studio");
+
+        // ── VLC ──────────────────────────────────────────────────────────────
+        m.insert("VLC media player", "VLC");
+        m.insert("VLC Helper", "VLC");
+
+        // ── Plex ─────────────────────────────────────────────────────────────
+        m.insert("Plex Media Server", "Plex");
+        m.insert("PlexMediaServer", "Plex");
+        m.insert("Plex Helper", "Plex");
+
+        // ── Adobe apps ───────────────────────────────────────────────────────
+        m.insert("Adobe Photoshop 2024", "Photoshop");
+        m.insert("Adobe Photoshop 2025", "Photoshop");
+        m.insert("Adobe Illustrator 2024", "Illustrator");
+        m.insert("Adobe Illustrator 2025", "Illustrator");
+        m.insert("Adobe Premiere Pro 2024", "Premiere Pro");
+        m.insert("Adobe After Effects 2024", "After Effects");
+        m.insert("Adobe Lightroom", "Lightroom");
+        m.insert("Adobe Acrobat", "Acrobat");
+
+        // ── Bartender / system UI helpers ────────────────────────────────────
+        m.insert("Bartender 4 Helper", "Bartender");
+        m.insert("Bartender 5 Helper", "Bartender");
+
+        // ── macOS system processes that are worth naming nicely ───────────────
+        m.insert("WindowServer", "WindowServer");
+        m.insert("kernel_task", "kernel_task");
+        m.insert("launchd", "launchd");
+        m.insert("mds", "Spotlight");
+        m.insert("mds_stores", "Spotlight");
+        m.insert("mdworker_shared", "Spotlight");
+        m.insert("mdworker", "Spotlight");
+        m.insert("com.apple.CoreSimulator.CoreSimulatorService", "Simulator");
+        m.insert("Simulator", "Simulator");
+        m.insert("SimulatorBridge", "Simulator");
+        m.insert("mediaanalysisd", "Media Analysis");
+        m.insert("mediaremoted", "Media Remote");
+
+        m
+    })
+}
 
 #[derive(Debug, Deserialize)]
 pub struct PowermetricsSample {
@@ -38,6 +311,7 @@ pub struct PowermetricsSample {
 pub struct ProcessorMetrics {
     pub cpu_power: f64,
     pub gpu_power: f64,
+    #[allow(dead_code)]
     pub combined_power: f64,
 }
 
@@ -261,6 +535,7 @@ fn convert_samples(
         .expect("invalid timestamp")
         .with_timezone(&Utc);
 
+    let map = process_app_map();
     let duration_s = sample.elapsed_ns as f64 / 1_000_000_000.0;
 
     let total_cpu: f64 = sample.coalitions.iter().map(|t| t.cputime_ms_per_s).sum();
@@ -286,12 +561,7 @@ fn convert_samples(
 
     for coal in sample.coalitions {
         // try to figure out the actual app name
-        let app_name = coal
-            .name
-            .split('.')
-            .next_back()
-            .unwrap_or_else(|| &coal.name)
-            .to_string();
+        let app_name = coal.name.split('.').next_back();
 
         let category = if coal.name.starts_with("com.apple.") {
             Some("system".to_string())
@@ -347,6 +617,12 @@ fn convert_samples(
 
             let cpu_percent = proc.cputime_ms_per_s / 1000.0 * 100.0;
             let gpu_percent = proc.gputime_ms_per_s / 1000.0 * 100.0;
+
+            let app_name = map
+                .get(proc.name.as_str())
+                .copied()
+                .unwrap_or_else(|| app_name.unwrap_or(proc.name.as_str()))
+                .to_string();
 
             buf.push(EnergySample {
                 id: None,

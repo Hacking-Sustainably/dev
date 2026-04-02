@@ -2,23 +2,28 @@
 {% block title %}Compare Apps — greenB{% endblock %}
 
 {% block content %}
-{% if app_names %}
+{% if grouped_apps %}
 <!-- App selector tile -->
 <div class="tile tile-pad mb-2">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-        <div>
-            <div class="tile-title" style="margin-bottom:0.4rem;">Compare Applications</div>
+        <div style="flex:1;">
+            <div class="tile-title" style="margin-bottom:0.6rem;">Compare Applications</div>
             <div class="d-flex flex-wrap gap-2" id="app-selector">
-                {% for name in app_names %}
-                <button class="btn btn-outline-secondary btn-sm app-toggle d-inline-flex align-items-center gap-1" data-app="{{ name }}"
-                        onclick="this.classList.toggle('active'); this.classList.toggle('btn-primary'); this.classList.toggle('btn-outline-secondary'); updateComparison();">
-                    <img src="/icon/{{ name }}" class="app-icon-sm" alt="" loading="lazy"> {{ name }}
+                {% for app in grouped_apps %}
+                <button class="btn btn-outline-secondary btn-sm app-toggle d-inline-flex align-items-center gap-1"
+                        data-app="{{ app.app_name }}"
+                        onclick="toggleApp(this);">
+                    {% if app.rating %}
+                    <span class="rating-badge rating-{{ app.rating }}" style="width:1.1rem;height:1.1rem;font-size:0.52rem;flex-shrink:0;">{{ app.rating }}</span>
+                    {% endif %}
+                    <img src="/icon/{{ app.app_name }}" class="app-icon-sm" alt="" loading="lazy">
+                    {{ app.app_name }}
                 </button>
                 {% endfor %}
             </div>
         </div>
         <div class="d-flex gap-2 mt-1">
-            <button class="btn btn-sm btn-outline-secondary" onclick="selectAll()">Select All</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="selectAll()">All</button>
             <button class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">Clear</button>
         </div>
     </div>
@@ -80,14 +85,29 @@
 
 {% block extra_scripts %}
 <script>
-var appData = null;
+// Grouped app data baked in from server — keyed by app_name.
+const APP_DATA = {};
+{% for app in grouped_apps %}
+APP_DATA[{{ app.app_name | tojson }}] = {
+    app_name:          {{ app.app_name | tojson }},
+    avg_power_watts:   {{ app.avg_power }},
+    total_energy_joules: {{ app.total_energy }},
+    avg_cpu_percent:   {{ app.avg_cpu }},
+    avg_memory_mb:     {{ app.avg_memory }},
+    avg_gpu_percent:   {{ app.avg_gpu }},
+    avg_disk_read_mb:  {{ app.avg_disk_read }},
+    avg_disk_write_mb: {{ app.avg_disk_write }},
+    sample_count:      {{ app.sample_count }},
+    rating:            {{ (app.rating or '') | tojson }},
+};
+{% endfor %}
 
 const ACCENT  = '#00d4ff';
-const ACCENT2 = '#f0c050';
 const INK     = '#7b83a6';
 const RULE    = '#2c3268';
 const FONT    = 'DM Sans, system-ui, sans-serif';
-const CARD    = '#222750';
+
+const RATING_COLORS = { A:'#22c55e', B:'#84cc16', C:'#f0c050', D:'#f97316', E:'#f87171', F:'#ef4444', '':'#7b83a6' };
 
 const baseLayout = {
     paper_bgcolor: 'rgba(0,0,0,0)',
@@ -104,20 +124,22 @@ const palette = [
     '#22c55e','#f87171'
 ];
 
-fetch('/api/summary/apps')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        appData = {};
-        data.forEach(function(d) { appData[d.app_name] = d; });
-        var buttons = document.querySelectorAll('.app-toggle');
-        buttons.forEach(function(btn, i) {
-            if (i < 5) {
-                btn.classList.add('active', 'btn-primary');
-                btn.classList.remove('btn-outline-secondary');
-            }
-        });
-        updateComparison();
+window.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.app-toggle').forEach(function(btn, i) {
+        if (i < 5) {
+            btn.classList.add('active', 'btn-primary');
+            btn.classList.remove('btn-outline-secondary');
+        }
     });
+    updateComparison();
+});
+
+function toggleApp(btn) {
+    btn.classList.toggle('active');
+    btn.classList.toggle('btn-primary');
+    btn.classList.toggle('btn-outline-secondary');
+    updateComparison();
+}
 
 function getSelectedApps() {
     return Array.from(document.querySelectorAll('.app-toggle.active'))
@@ -141,11 +163,21 @@ function deselectAll() {
 }
 
 function updateComparison() {
-    if (!appData) return;
     var selected = getSelectedApps();
-    var data = selected.map(function(name) { return appData[name]; }).filter(Boolean);
+    var data = selected.map(function(name) { return APP_DATA[name]; }).filter(Boolean);
+    if (data.length === 0) {
+        ['chart-power','chart-cpu','chart-memory','chart-energy',
+         'chart-disk-read','chart-disk-write','chart-radar'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.innerHTML = '';
+        });
+        return;
+    }
+
     var names = data.map(function(d) { return d.app_name; });
-    var barColors = names.map(function(_, i) { return palette[i % palette.length]; });
+    var barColors = data.map(function(d, i) {
+        return d.rating ? RATING_COLORS[d.rating] : palette[i % palette.length];
+    });
 
     function makeBar(container, values, title) {
         Plotly.newPlot(container, [{
@@ -159,44 +191,46 @@ function updateComparison() {
         }, { responsive: true, displayModeBar: false });
     }
 
-    makeBar('chart-power', data.map(function(d) { return d.avg_power_watts; }), 'Watts');
-    makeBar('chart-cpu', data.map(function(d) { return d.avg_cpu_percent; }), 'CPU %');
-    makeBar('chart-memory', data.map(function(d) { return d.avg_memory_mb; }), 'MB');
-    makeBar('chart-energy', data.map(function(d) { return d.total_energy_joules; }), 'Joules');
-    makeBar('chart-disk-read', data.map(function(d) { return d.avg_disk_read_mb || 0; }), 'MB');
+    makeBar('chart-power',      data.map(function(d) { return d.avg_power_watts * 1000; }),    'mW');
+    makeBar('chart-cpu',        data.map(function(d) { return d.avg_cpu_percent; }),    'CPU %');
+    makeBar('chart-memory',     data.map(function(d) { return d.avg_memory_mb; }),      'MB');
+    makeBar('chart-energy',     data.map(function(d) { return d.total_energy_joules; }),'Joules');
+    makeBar('chart-disk-read',  data.map(function(d) { return d.avg_disk_read_mb || 0; }), 'MB');
     makeBar('chart-disk-write', data.map(function(d) { return d.avg_disk_write_mb || 0; }), 'MB');
 
-    if (data.length > 0) {
-        var metrics = ['avg_power_watts', 'avg_cpu_percent', 'avg_memory_mb', 'total_energy_joules', 'avg_disk_read_mb', 'avg_disk_write_mb'];
-        var labels = ['Power (W)', 'CPU %', 'Memory (MB)', 'Energy (J)', 'Disk Read (MB)', 'Disk Write (MB)'];
-        var maxVals = metrics.map(function(m) {
-            return Math.max.apply(null, data.map(function(d) { return d[m] || 0; }).concat([0.001]));
-        });
+    var metrics = ['avg_power_mw','avg_cpu_percent','avg_memory_mb','total_energy_joules','avg_disk_read_mb','avg_disk_write_mb'];
+    var labels  = ['Power (mW)','CPU %','Memory (MB)','Energy (J)','Disk Read (MB)','Disk Write (MB)'];
+    // Add derived mW field for radar
+    data.forEach(function(d) { d.avg_power_mw = d.avg_power_watts * 1000; });
+    var maxVals = metrics.map(function(m) {
+        return Math.max.apply(null, data.map(function(d) { return d[m] || 0; }).concat([0.001]));
+    });
 
-        var radarTraces = data.map(function(d, i) {
-            var c = palette[i % palette.length];
-            return {
-                type: 'scatterpolar',
-                r: metrics.map(function(m, mi) { return ((d[m] || 0) / maxVals[mi]) * 100; }),
-                theta: labels,
-                fill: 'toself',
-                name: d.app_name,
-                fillcolor: c + '22',
-                line: { color: c },
-            };
-        });
+    var radarTraces = data.map(function(d, i) {
+        var c = d.rating ? RATING_COLORS[d.rating] : palette[i % palette.length];
+        return {
+            type: 'scatterpolar',
+            r: metrics.map(function(m, mi) { return ((d[m] || 0) / maxVals[mi]) * 100; }),
+            theta: labels,
+            fill: 'toself',
+            name: d.app_name + (d.rating ? '  [' + d.rating + ']' : ''),
+            fillcolor: c + '22',
+            line: { color: c },
+        };
+    });
 
-        Plotly.newPlot('chart-radar', radarTraces, {
-            ...baseLayout,
-            margin: { t: 20, b: 40, l: 60, r: 60 },
-            polar: {
-                bgcolor: 'rgba(0,0,0,0)',
-                radialaxis: { visible: true, range: [0, 100], color: RULE, gridcolor: RULE, tickfont: { color: INK, size: 9, family: FONT } },
-                angularaxis: { color: INK, tickfont: { color: INK, size: 10, family: FONT }, linecolor: RULE, gridcolor: RULE },
-            },
-            legend: { orientation: 'h', y: -0.12, font: { size: 10, family: FONT, color: INK } },
-        }, { responsive: true, displayModeBar: false });
-    }
+    Plotly.newPlot('chart-radar', radarTraces, {
+        ...baseLayout,
+        margin: { t: 20, b: 40, l: 60, r: 60 },
+        polar: {
+            bgcolor: 'rgba(0,0,0,0)',
+            radialaxis: { visible: true, range: [0, 100], color: RULE, gridcolor: RULE,
+                          tickfont: { color: INK, size: 9, family: FONT } },
+            angularaxis: { color: INK, tickfont: { color: INK, size: 10, family: FONT },
+                           linecolor: RULE, gridcolor: RULE },
+        },
+        legend: { orientation: 'h', y: -0.12, font: { size: 10, family: FONT, color: INK } },
+    }, { responsive: true, displayModeBar: false });
 }
 </script>
 {% endblock %}

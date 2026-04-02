@@ -31,7 +31,7 @@
     <div class="col-lg-2">
         <div class="tile tile-pad d-flex flex-column justify-content-center" style="height:100%;min-height:340px;">
             <div class="tile-title">Total Energy</div>
-            <div class="tile-number" style="font-size:2.8rem;">{{ total_energy }}<span class="unit">J</span></div>
+            <div class="tile-number" style="font-size:2.8rem;">{{ "%.3f"|format(total_energy) }}<span class="unit">J</span></div>
             <div style="font-size:0.7rem;color:var(--muted);margin-top:0.5rem;">{{ "{:,}".format(total_samples) }} samples</div>
             <div style="margin-top:auto;padding-top:1rem;">
                 <div style="display:flex;justify-content:space-between;font-size:0.6rem;color:var(--muted);margin-bottom:0.2rem;">
@@ -58,52 +58,55 @@
         <div class="tile" style="height:100%;">
             <div style="padding:0.7rem 1rem 0.3rem;display:flex;align-items:center;justify-content:space-between;">
                 <span class="tile-title" style="margin:0;">Applications</span>
-                <span style="font-size:0.6rem;color:var(--muted);">{{ top_apps|length }} tracked</span>
+                <span style="font-size:0.6rem;color:var(--muted);">{{ top_apps|length }} groups</span>
             </div>
             {% if top_apps %}
-            {%- set max_e = top_apps[0].total_energy if top_apps else 1 -%}
+            {%- set max_e = top_apps[0]['total_energy'] if top_apps else 1 -%}
             <div style="overflow-y:auto;max-height:305px;">
                 <!-- header row -->
                 <div style="display:grid;grid-template-columns:24px 1fr 70px 46px 46px;gap:0 0.4rem;padding:0.2rem 0.9rem 0.25rem;border-bottom:1px solid rgba(255,255,255,0.06);">
                     <span></span>
                     <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);">App</span>
                     <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;">Energy</span>
-                    <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;">Avg W</span>
+                    <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;">Avg mW</span>
                     <span style="font-size:0.55rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:right;">CPU%</span>
                 </div>
                 {% for a in top_apps %}
-                {%- set pct = ((a.total_energy or 0) / (max_e if max_e else 1) * 100) | round(1) -%}
-                <!-- app row — clicking expands subprocesses -->
-                <div class="app-proc-row" id="app-row-{{ loop.index }}" onclick="toggleSubrows({{ loop.index }})" style="display:grid;grid-template-columns:24px 1fr 70px 46px 46px;gap:0 0.4rem;align-items:center;padding:0.3rem 0.9rem;cursor:pointer;transition:background 0.12s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''">
-                    <img src="/icon/{{ a.app_name }}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;" alt="" loading="lazy">
+                {%- set pct = ((a['total_energy'] or 0) / (max_e if max_e else 1) * 100) | round(1) -%}
+                {%- set has_sub = a['subprocesses'] | length > 0 -%}
+                <!-- app row -->
+                <div id="app-row-{{ loop.index }}"
+                     {% if has_sub %}onclick="toggleSubrows({{ loop.index }})"{% else %}onclick="window.location='/app/{{ a['app_name'] }}'"{% endif %}
+                     style="display:grid;grid-template-columns:24px 1fr 70px 46px 46px;gap:0 0.4rem;align-items:center;padding:0.3rem 0.9rem;cursor:pointer;transition:background 0.12s;"
+                     onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''">
+                    <img src="/icon/{{ a['app_name'] }}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;" alt="" loading="lazy">
                     <div style="min-width:0;">
-                        <div style="font-size:0.72rem;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.app_name }}</div>
-                        <!-- mini energy bar -->
+                        <div style="font-size:0.72rem;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            {{ a['app_name'] }}{% if has_sub %}<span style="font-size:0.55rem;color:var(--muted);margin-left:0.3rem;">+{{ a['subprocesses']|length }}</span>{% endif %}
+                        </div>
                         <div style="height:2px;background:rgba(255,255,255,0.06);border-radius:1px;margin-top:2px;">
                             <div style="height:100%;width:{{ pct }}%;background:var(--accent);border-radius:1px;"></div>
                         </div>
                     </div>
-                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.1f"|format(a.total_energy or 0) }}J</span>
-                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--accent);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.2f"|format(a.avg_power or 0) }}</span>
-                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--text-dim);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.0f"|format(a.avg_cpu or 0) }}</span>
+                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.3f"|format(a['total_energy'] or 0) }}J</span>
+                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--accent);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.2f"|format((a['avg_power'] or 0) * 1000) }}mW</span>
+                    <span style="font-size:0.68rem;font-family:var(--mono);color:var(--text-dim);text-align:right;font-variant-numeric:tabular-nums;">{{ "%.0f"|format(a['avg_cpu'] or 0) }}</span>
                 </div>
-                <!-- subgroup rows (process group placeholder — wired to backend later) -->
+                <!-- real subprocess rows -->
+                {% if has_sub %}
                 <div id="subrows-{{ loop.index }}" style="display:none;">
-                    <div style="display:grid;grid-template-columns:24px 1fr 70px 46px 46px;gap:0 0.4rem;align-items:center;padding:0.25rem 0.9rem 0.25rem 2.2rem;background:rgba(0,0,0,0.15);">
-                        <span style="font-size:0.6rem;color:var(--muted);opacity:0.5;">&#9492;</span>
-                        <span style="font-size:0.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.app_name }} (main)</span>
-                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.1f"|format((a.total_energy or 0) * 0.8) }}J</span>
-                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.2f"|format((a.avg_power or 0) * 0.8) }}</span>
-                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.0f"|format((a.avg_cpu or 0) * 0.8) }}</span>
-                    </div>
-                    <div style="display:grid;grid-template-columns:24px 1fr 70px 46px 46px;gap:0 0.4rem;align-items:center;padding:0.25rem 0.9rem 0.25rem 2.2rem;background:rgba(0,0,0,0.15);">
-                        <span style="font-size:0.6rem;color:var(--muted);opacity:0.5;">&#9492;</span>
-                        <span style="font-size:0.65rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.app_name }} Helper</span>
-                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.1f"|format((a.total_energy or 0) * 0.2) }}J</span>
-                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.2f"|format((a.avg_power or 0) * 0.2) }}</span>
-                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.0f"|format((a.avg_cpu or 0) * 0.2) }}</span>
-                    </div>
+                    {% for sub in a['subprocesses'] %}
+                    <a href="/app/{{ sub['app_name'] }}" style="text-decoration:none;display:grid;grid-template-columns:24px 1fr 70px 46px 46px;gap:0 0.4rem;align-items:center;padding:0.22rem 0.9rem 0.22rem 2rem;background:rgba(0,0,0,0.18);"
+                       onmouseover="this.style.background='rgba(0,212,255,0.06)'" onmouseout="this.style.background='rgba(0,0,0,0.18)'">
+                        <span style="font-size:0.58rem;color:var(--muted);opacity:0.5;padding-left:2px;">&#9492;</span>
+                        <span style="font-size:0.64rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ sub['app_name'] }}</span>
+                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.3f"|format(sub['total_energy']) }}J</span>
+                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.2f"|format((sub['avg_power'] or 0) * 1000) }}mW</span>
+                        <span style="font-size:0.62rem;font-family:var(--mono);color:var(--muted);text-align:right;">{{ "%.0f"|format(sub['avg_cpu']) }}</span>
+                    </a>
+                    {% endfor %}
                 </div>
+                {% endif %}
                 {% endfor %}
             </div>
             {% else %}
@@ -115,7 +118,7 @@
 
 <!-- Row 2: System Metrics overview -->
 <div class="row g-2 mb-2" data-section="sec-metrics">
-    <div class="col-lg-3">
+    <div class="col-lg-4">
         <div class="tile tile-pad d-flex flex-column" style="height:100%;">
             <div class="tile-title">Avg Disk Read</div>
             <div class="tile-number" style="font-size:2rem;">
@@ -124,7 +127,7 @@
             <div style="font-size:0.65rem;color:var(--muted);margin-top:0.3rem;">per sample avg</div>
         </div>
     </div>
-    <div class="col-lg-3">
+    <div class="col-lg-4">
         <div class="tile tile-pad d-flex flex-column" style="height:100%;">
             <div class="tile-title">Avg Disk Write</div>
             <div class="tile-number" style="font-size:2rem;">
@@ -133,22 +136,13 @@
             <div style="font-size:0.65rem;color:var(--muted);margin-top:0.3rem;">per sample avg</div>
         </div>
     </div>
-    <div class="col-lg-3">
+    <div class="col-lg-4">
         <div class="tile tile-pad d-flex flex-column" style="height:100%;">
             <div class="tile-title">Avg GPU</div>
             <div class="tile-number" style="font-size:2rem;">
                 {{ "%.2f"|format(sys_avg_gpu) }}<span class="unit">%</span>
             </div>
             <div style="font-size:0.65rem;color:var(--muted);margin-top:0.3rem;">utilization</div>
-        </div>
-    </div>
-    <div class="col-lg-3">
-        <div class="tile tile-pad d-flex flex-column" style="height:100%;">
-            <div class="tile-title">Avg Memory</div>
-            <div class="tile-number" style="font-size:2rem;">
-                {% if sys_avg_memory > 0 %}{{ "%.1f"|format(sys_avg_memory) }}{% else %}—{% endif %}<span class="unit">MB</span>
-            </div>
-            <div style="font-size:0.65rem;color:var(--muted);margin-top:0.3rem;">per process avg</div>
         </div>
     </div>
 </div>
@@ -159,7 +153,7 @@
     <div class="col-lg-2">
         <div class="tile tile-pad d-flex flex-column" style="height:100%;">
             <div class="tile-title">Avg Power</div>
-            <div class="tile-number accent" style="font-size:2.8rem;">{{ total_avg_power }}<span class="unit" style="color:var(--accent);opacity:.6;">W</span></div>
+            <div class="tile-number accent" style="font-size:2.8rem;">{{ "%.2f"|format(total_avg_power_mw) }}<span class="unit" style="color:var(--accent);opacity:.6;">mW</span></div>
             <div style="font-size:0.68rem;color:var(--muted);margin-top:0.3rem;">system average</div>
         </div>
     </div>
@@ -219,7 +213,7 @@
                         <span class="rating-badge rating-{{ r.rating }}">{{ r.rating }}</span>
                         <img src="/icon/{{ r.app_name }}" class="app-icon" alt="" loading="lazy">
                         <span class="app-name">{{ r.app_name }}</span>
-                        <span class="watt-reading">{{ "%.1f"|format(r.avg_power_watts) }} W</span>
+                        <span class="watt-reading">{{ "%.2f"|format(r.avg_power_watts * 1000) }} mW</span>
                     </a>
                     {% endfor %}
                 </div>
@@ -252,8 +246,8 @@
         {% if total_energy > 0 %}
         {% set kwh = total_energy / 3600000 %}
         <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.9rem; border-left: 3px solid var(--accent); padding-left: 0.7rem;">
-            <strong style="color: var(--text);">{{ "{:,.1f}".format(total_energy) }} J</strong> total &nbsp;/&nbsp;
-            {{ "%.6f"|format(kwh) }} kWh &mdash;
+            <strong style="color: var(--text);">{{ "%.4f"|format(total_energy) }} J</strong> total &nbsp;/&nbsp;
+            {{ "%.8f"|format(kwh) }} kWh &mdash;
             J = <em>how much energy</em>; W = the <em>rate</em>.
         </p>
 
@@ -523,7 +517,7 @@ document.addEventListener('DOMContentLoaded', function() {
         /* Scatter */
         Plotly.newPlot('chart-cpu-vs-power', [{
             x: avgCpu.map(v => v ? Math.round(v * 100) / 100 : 0),
-            y: avgPower.map(v => v ? Math.round(v * 1000) / 1000 : 0),
+            y: avgPower.map(v => v ? Math.round(v * 1000 * 100) / 100 : 0),
             text: apps,
             mode: 'markers+text',
             textposition: 'top center',
@@ -532,7 +526,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }], {
             ...baseLayout,
             xaxis: { ...baseLayout.xaxis, title: { text: 'Avg CPU %', font: { size: 10, family: FONT } } },
-            yaxis: { ...baseLayout.yaxis, title: { text: 'Avg Power (W)', font: { size: 10, family: FONT } } },
+            yaxis: { ...baseLayout.yaxis, title: { text: 'Avg Power (mW)', font: { size: 10, family: FONT } } },
         }, { responsive: true, displayModeBar: false });
 
         /* Pie */

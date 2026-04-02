@@ -70,6 +70,17 @@ class EnergySample(db.Model):
     category = db.Column(db.String(100), nullable=True)     # e.g. "browser", "ide", "game"
     is_background = db.Column(db.Boolean, default=False)
 
+    # Extra powermetrics fields
+    cputime_userland_ratio = db.Column(db.Float, nullable=True)
+    intr_wakeups_per_s = db.Column(db.Float, nullable=True)
+    idle_wakeups_per_s = db.Column(db.Float, nullable=True)
+    pageins = db.Column(db.Integer, nullable=True)
+    qos_background_ms_per_s = db.Column(db.Float, nullable=True)
+    qos_utility_ms_per_s = db.Column(db.Float, nullable=True)
+    qos_default_ms_per_s = db.Column(db.Float, nullable=True)
+    qos_user_initiated_ms_per_s = db.Column(db.Float, nullable=True)
+    qos_user_interactive_ms_per_s = db.Column(db.Float, nullable=True)
+
     def to_dict(self):
         return {
             "id": self.id,
