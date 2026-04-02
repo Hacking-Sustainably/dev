@@ -283,7 +283,7 @@ def timeline_summary():
 
 @api_bp.route("/summary/energy-over-time", methods=["GET"])
 def energy_over_time():
-    """Return cumulative energy (J) over time, bucketed into time intervals."""
+    """Return cumulative energy (kJ) over time, bucketed into time intervals."""
     MAX_POINTS = 100
 
     query = (
