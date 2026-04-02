@@ -118,7 +118,16 @@
 
 <!-- Row 2: System Metrics overview -->
 <div class="row g-2 mb-2" data-section="sec-metrics">
-    <div class="col-lg-4">
+    <div class="col-lg-3">
+        <div class="tile tile-pad d-flex flex-column" style="height:100%;">
+            <div class="tile-title">Avg CPU</div>
+            <div class="tile-number" style="font-size:2rem;">
+                {{ "%.2f"|format(sys_avg_cpu) }}<span class="unit">%</span>
+            </div>
+            <div style="font-size:0.65rem;color:var(--muted);margin-top:0.3rem;">total usage over time</div>
+        </div>
+    </div>
+    <div class="col-lg-3">
         <div class="tile tile-pad d-flex flex-column" style="height:100%;">
             <div class="tile-title">Avg Disk Read</div>
             <div class="tile-number" style="font-size:2rem;">
@@ -127,7 +136,7 @@
             <div style="font-size:0.65rem;color:var(--muted);margin-top:0.3rem;">per sample avg</div>
         </div>
     </div>
-    <div class="col-lg-4">
+    <div class="col-lg-3">
         <div class="tile tile-pad d-flex flex-column" style="height:100%;">
             <div class="tile-title">Avg Disk Write</div>
             <div class="tile-number" style="font-size:2rem;">
@@ -136,7 +145,7 @@
             <div style="font-size:0.65rem;color:var(--muted);margin-top:0.3rem;">per sample avg</div>
         </div>
     </div>
-    <div class="col-lg-4">
+    <div class="col-lg-3">
         <div class="tile tile-pad d-flex flex-column" style="height:100%;">
             <div class="tile-title">Avg GPU</div>
             <div class="tile-number" style="font-size:2rem;">
