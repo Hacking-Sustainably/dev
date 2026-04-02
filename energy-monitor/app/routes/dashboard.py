@@ -180,6 +180,18 @@ def index():
     total_avg_power = (
         base_query().with_entities(func.avg(EnergySample.power_watts)).scalar() or 0
     )
+    sys_avg_cpu_sub = (
+        base_query()
+        .with_entities(
+            EnergySample.timestamp,
+            func.sum(EnergySample.cpu_percent).label("total_cpu"),
+        )
+        .group_by(EnergySample.timestamp)
+        .subquery()
+    )
+    sys_avg_cpu = (
+        db.session.query(func.avg(sys_avg_cpu_sub.c.total_cpu)).scalar() or 0
+    )
     sys_avg_disk_read = (
         base_query().with_entities(func.avg(EnergySample.disk_read_mb)).scalar() or 0
     )
@@ -213,6 +225,7 @@ def index():
         total_energy=round(total_energy, 2),
         all_apps_count=all_apps_count,
         total_avg_power_mw=round(total_avg_power * 1000, 2),
+        sys_avg_cpu=round(sys_avg_cpu, 2),
         sys_avg_disk_read=round(sys_avg_disk_read, 4),
         sys_avg_disk_write=round(sys_avg_disk_write, 4),
         sys_avg_gpu=round(sys_avg_gpu, 2),

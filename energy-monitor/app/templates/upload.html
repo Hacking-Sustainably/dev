@@ -208,59 +208,117 @@ function generateSample() {
     const resultDiv = document.getElementById('sample-result');
     resultDiv.innerHTML = '<div style="color:var(--muted);font-size:0.8rem;">Generating\u2026</div>';
 
+    // Each profile has a parent app with optional helper/subprocess entries.
+    // Power values are in watts (realistic mW-scale from powermetrics).
     const appProfiles = [
-        { name: 'Chrome', cat: 'browser', basePower: 4.5, baseCpu: 15, baseMem: 800 },
-        { name: 'Firefox', cat: 'browser', basePower: 3.2, baseCpu: 10, baseMem: 600 },
-        { name: 'VS Code', cat: 'ide', basePower: 2.8, baseCpu: 8, baseMem: 500 },
-        { name: 'Slack', cat: 'communication', basePower: 1.5, baseCpu: 5, baseMem: 350 },
-        { name: 'Spotify', cat: 'media', basePower: 1.2, baseCpu: 3, baseMem: 250 },
-        { name: 'Docker Desktop', cat: 'dev-tools', basePower: 6.0, baseCpu: 20, baseMem: 2000 },
-        { name: 'Zoom', cat: 'communication', basePower: 5.5, baseCpu: 25, baseMem: 600 },
-        { name: 'Terminal', cat: 'dev-tools', basePower: 0.5, baseCpu: 2, baseMem: 80 },
-        { name: 'Finder', cat: 'system', basePower: 0.2, baseCpu: 1, baseMem: 60 },
-        { name: 'Mail', cat: 'communication', basePower: 0.8, baseCpu: 2, baseMem: 150 },
-        { name: 'Preview', cat: 'utility', basePower: 0.3, baseCpu: 1, baseMem: 100 },
-        { name: 'Figma', cat: 'design', basePower: 3.5, baseCpu: 12, baseMem: 700 },
-        { name: 'IntelliJ IDEA', cat: 'ide', basePower: 5.0, baseCpu: 18, baseMem: 1500 },
-        { name: 'Notion', cat: 'productivity', basePower: 1.8, baseCpu: 4, baseMem: 300 },
-        { name: 'Discord', cat: 'communication', basePower: 2.0, baseCpu: 6, baseMem: 400 },
+        { name: 'Google Chrome', cat: 'browser', basePower: 0.025, baseCpu: 12, baseGpu: 2.0, helpers: [
+            { name: 'Google Chrome Helper (Renderer)', pFrac: 0.5, cFrac: 0.4 },
+            { name: 'Google Chrome Helper (GPU)', pFrac: 0.3, cFrac: 0.3 },
+            { name: 'Google Chrome Helper', pFrac: 0.1, cFrac: 0.1 },
+        ]},
+        { name: 'Firefox', cat: 'browser', basePower: 0.018, baseCpu: 9, baseGpu: 1.5, helpers: [
+            { name: 'Web Content', pFrac: 0.4, cFrac: 0.3 },
+            { name: 'plugin-container', pFrac: 0.15, cFrac: 0.15 },
+        ]},
+        { name: 'Code', cat: 'ide', basePower: 0.015, baseCpu: 7, baseGpu: 0.8, helpers: [
+            { name: 'Code Helper (Renderer)', pFrac: 0.4, cFrac: 0.35 },
+            { name: 'Code Helper (Plugin)', pFrac: 0.25, cFrac: 0.2 },
+            { name: 'Code Helper (GPU)', pFrac: 0.15, cFrac: 0.15 },
+        ]},
+        { name: 'Slack', cat: 'communication', basePower: 0.008, baseCpu: 4, baseGpu: 0.3, helpers: [
+            { name: 'Slack Helper (Renderer)', pFrac: 0.35, cFrac: 0.3 },
+            { name: 'Slack Helper', pFrac: 0.1, cFrac: 0.1 },
+        ]},
+        { name: 'Spotify', cat: 'media', basePower: 0.006, baseCpu: 2.5, baseGpu: 0.2, helpers: [
+            { name: 'Spotify Helper (Renderer)', pFrac: 0.3, cFrac: 0.2 },
+        ]},
+        { name: 'Docker', cat: 'dev-tools', basePower: 0.035, baseCpu: 18, baseGpu: 0.1, helpers: [
+            { name: 'com.docker.backend', pFrac: 0.5, cFrac: 0.5 },
+            { name: 'com.docker.hyperkit', pFrac: 0.3, cFrac: 0.3 },
+        ]},
+        { name: 'Discord', cat: 'communication', basePower: 0.010, baseCpu: 5, baseGpu: 1.0, helpers: [
+            { name: 'Discord Helper (Renderer)', pFrac: 0.4, cFrac: 0.3 },
+            { name: 'Discord Helper (GPU)', pFrac: 0.2, cFrac: 0.2 },
+            { name: 'Discord Helper', pFrac: 0.1, cFrac: 0.1 },
+        ]},
+        { name: 'Terminal', cat: 'dev-tools', basePower: 0.002, baseCpu: 1.5, baseGpu: 0.0, helpers: [] },
+        { name: 'Finder', cat: 'system', basePower: 0.001, baseCpu: 0.8, baseGpu: 0.0, helpers: [] },
+        { name: 'WindowServer', cat: 'system', basePower: 0.040, baseCpu: 22, baseGpu: 5.0, helpers: [] },
+        { name: 'Safari', cat: 'browser', basePower: 0.012, baseCpu: 6, baseGpu: 1.2, helpers: [
+            { name: 'com.apple.WebKit.WebContent', pFrac: 0.45, cFrac: 0.4 },
+            { name: 'com.apple.WebKit.Networking', pFrac: 0.15, cFrac: 0.1 },
+            { name: 'com.apple.WebKit.GPU', pFrac: 0.2, cFrac: 0.2 },
+        ]},
+        { name: 'Signal', cat: 'communication', basePower: 0.005, baseCpu: 2, baseGpu: 0.3, helpers: [
+            { name: 'Signal Helper (Renderer)', pFrac: 0.35, cFrac: 0.25 },
+        ]},
+        { name: 'Spotlight', cat: 'system', basePower: 0.008, baseCpu: 5, baseGpu: 0.0, helpers: [
+            { name: 'mds_stores', pFrac: 0.5, cFrac: 0.5 },
+            { name: 'mdworker_shared', pFrac: 0.2, cFrac: 0.2 },
+        ]},
+        { name: 'Microsoft Teams', cat: 'communication', basePower: 0.020, baseCpu: 10, baseGpu: 1.5, helpers: [
+            { name: 'Microsoft Teams Helper (Renderer)', pFrac: 0.4, cFrac: 0.35 },
+            { name: 'Microsoft Teams Helper (GPU)', pFrac: 0.2, cFrac: 0.2 },
+        ]},
+        { name: 'Arc', cat: 'browser', basePower: 0.014, baseCpu: 8, baseGpu: 1.8, helpers: [
+            { name: 'Arc Helper (Renderer)', pFrac: 0.45, cFrac: 0.35 },
+            { name: 'Arc Helper (GPU)', pFrac: 0.25, cFrac: 0.25 },
+        ]},
     ];
 
     const selectedApps = appProfiles.slice(0, Math.min(appCount, appProfiles.length));
     const now = new Date();
     const durationMs = durationHours * 3600000;
     const start = new Date(now.getTime() - durationMs);
-    const interval = durationMs / n;
 
-    const samples = [];
-    for (let i = 0; i < n; i++) {
-        const app = selectedApps[i % selectedApps.length];
-        const ts = new Date(start.getTime() + i * interval);
-        const noise = function() { return (Math.random() - 0.5) * 0.4 + 1; };
-        const power = Math.max(0, app.basePower * noise());
+    // Build flat list of all process entries (parent + helpers)
+    var processEntries = [];
+    selectedApps.forEach(function(app) {
+        var parentFrac = 1.0;
+        app.helpers.forEach(function(h) { parentFrac -= h.pFrac; });
+        processEntries.push({
+            name: app.name, cat: app.cat,
+            power: app.basePower * Math.max(0.05, parentFrac),
+            cpu: app.baseCpu * Math.max(0.05, parentFrac),
+            gpu: app.baseGpu * Math.max(0.05, parentFrac),
+        });
+        app.helpers.forEach(function(h) {
+            processEntries.push({
+                name: h.name, cat: app.cat,
+                power: app.basePower * h.pFrac,
+                cpu: app.baseCpu * h.cFrac,
+                gpu: app.baseGpu * h.pFrac,
+            });
+        });
+    });
+
+    var interval = durationMs / n;
+    var samples = [];
+    for (var i = 0; i < n; i++) {
+        var proc = processEntries[i % processEntries.length];
+        var ts = new Date(start.getTime() + i * interval);
+        var noise = function() { return (Math.random() - 0.5) * 0.4 + 1; };
+        var power = Math.max(0, proc.power * noise());
         samples.push({
             timestamp: ts.toISOString(),
-            app_name: app.name,
-            power_watts: Math.round(power * 1000) / 1000,
-            energy_joules: Math.round(power * (interval / 1000) * 100) / 100,
-            cpu_percent: Math.round(Math.max(0, app.baseCpu * noise()) * 10) / 10,
-            memory_mb: Math.round(Math.max(0, app.baseMem * noise())),
-            gpu_percent: Math.round(Math.random() * 5 * 10) / 10,
-            disk_read_mb: Math.round(Math.random() * 2 * 100) / 100,
-            disk_write_mb: Math.round(Math.random() * 1 * 100) / 100,
-            network_sent_mb: Math.round(Math.random() * 0.5 * 100) / 100,
-            network_recv_mb: Math.round(Math.random() * 2 * 100) / 100,
-            category: app.cat,
-            is_background: Math.random() < 0.2,
+            app_name: proc.name,
+            power_watts: Math.round(power * 1e6) / 1e6,
+            energy_joules: Math.round(power * (interval / 1000) * 1e4) / 1e4,
+            cpu_percent: Math.round(Math.max(0, proc.cpu * noise()) * 10) / 10,
+            gpu_percent: Math.round(Math.max(0, proc.gpu * noise()) * 10) / 10,
+            disk_read_mb: Math.round(Math.random() * 0.5 * 1000) / 1000,
+            disk_write_mb: Math.round(Math.random() * 0.2 * 1000) / 1000,
+            category: proc.cat,
+            is_background: Math.random() < 0.15,
         });
     }
 
-    const payload = {
+    var payload = {
         session: {
             name: 'Sample Session (' + n + ' samples, ' + durationHours + 'h)',
             device_name: 'Demo Device',
             os_name: 'macOS',
-            os_version: '14.4',
+            os_version: '15.0',
         },
         samples: samples,
     };
